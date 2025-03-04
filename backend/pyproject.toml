@@ -17,6 +17,7 @@ dependencies = [
     "torch>=2.6.0",
     "numpy>=2.0.2",
     "tf-keras>=2.18.0",
+    "alembic>=1.14.1",
 ]
 
 [build-system]
