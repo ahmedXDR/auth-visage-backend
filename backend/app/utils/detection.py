@@ -1,9 +1,9 @@
 import io
-from typing import Any, List, Union
+from typing import Any
 
 import numpy as np
-from PIL import Image, ImageDraw
 from deepface import DeepFace
+from PIL import Image, ImageDraw
 
 models = [
     "VGG-Face",
@@ -38,7 +38,6 @@ DISTANCE_METRIC = metrics[2]
 
 
 def parse_frame(data) -> Image.Image:
-
     try:
         image_stream = io.BytesIO(data)
         image_stream.seek(0)
@@ -93,7 +92,7 @@ def get_largest_face_location(image: Image.Image):
 
 def embed_largest_face(
     image: Image.Image,
-) -> Union[np.ndarray, None]:
+) -> np.ndarray | None:
     """
     Load an image file and return the facial embedding for the largest face in
     the image using DeepFace.
@@ -126,7 +125,7 @@ def embed_largest_face(
 
 def find_best_match(
     image: Image.Image,
-    embeddings: List[np.ndarray],
+    embeddings: list[np.ndarray],
     similarity_threshold=None,
 ):
     """
@@ -144,8 +143,7 @@ def find_best_match(
 
     if similarity_threshold is None:
         similarity_threshold = DeepFace.verification.find_threshold(
-            MODEL_NAME,
-            DISTANCE_METRIC,
+            MODEL_NAME, DISTANCE_METRIC
         )
 
     largest_face_embedding = embed_largest_face(image)

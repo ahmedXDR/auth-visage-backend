@@ -1,7 +1,7 @@
 import socketio
 
 from app.core.socket_io import sio
-from app.utils.detection import parse_frame, get_largest_face_location
+from app.utils.detection import get_largest_face_location, parse_frame
 
 
 class NoPrefixNamespace(socketio.AsyncNamespace):
