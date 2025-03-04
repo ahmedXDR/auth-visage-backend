@@ -42,7 +42,7 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         session: Session,
         *,
         owner_id: uuid.UUID,
-        obj_in: CreateSchemaType
+        obj_in: CreateSchemaType,
     ) -> ModelType:
         """Create new record"""
         db_obj = self.model(**dict(owner_id=owner_id, **obj_in.model_dump()))

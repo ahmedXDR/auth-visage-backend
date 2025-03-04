@@ -29,12 +29,13 @@ def init_db(session: Session) -> None:
     # SQLModel.metadata.create_all(engine)
 
     result = session.exec(
-        select(User).where(User.email == settings.FIRST_SUPERUSER)
+        select(User).where(User.email == settings.FIRST_SUPERUSER),
     )
     user = result.first()
     if not user:
         super_client = create_client(
-            settings.SUPABASE_URL, settings.SUPABASE_KEY
+            settings.SUPABASE_URL,
+            settings.SUPABASE_KEY,
         )
         response = super_client.auth.sign_up(
             {

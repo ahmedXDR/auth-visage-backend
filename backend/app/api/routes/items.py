@@ -30,7 +30,9 @@ async def read_items(
 
 @router.put("/update-item/{id}")
 async def update_item(
-    id: str, item_in: ItemUpdate, session: SessionDep
+    id: str,
+    item_in: ItemUpdate,
+    session: SessionDep,
 ) -> Item | None:
     return item.update(session, id=UUID(id), obj_in=item_in)
 

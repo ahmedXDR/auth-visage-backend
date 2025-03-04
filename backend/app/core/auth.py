@@ -21,7 +21,8 @@ async def get_super_client() -> AsyncClient:
     )
     if not super_client:
         raise HTTPException(
-            status_code=500, detail="Super client not initialized"
+            status_code=500,
+            detail="Super client not initialized",
         )
     return super_client
 
@@ -37,7 +38,8 @@ TokenDep = Annotated[str, Depends(reusable_oauth2)]
 
 
 async def get_current_user(
-    token: TokenDep, super_client: SuperClient
+    token: TokenDep,
+    super_client: SuperClient,
 ) -> UserIn:
     """get current user from token and  validate same time"""
     user_rsp = await super_client.auth.get_user(jwt=token)

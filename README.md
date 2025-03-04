@@ -34,6 +34,17 @@ supabase start
 >```
 > modify the `.env` from the output of `supabase start` or run `supabase status` manually.
 
+## Test
+
+```bash
+cd backend
+# test connection of db and migration
+scripts/pre-start.sh
+# unit test
+scripts/test.sh
+# test connection of db and test code
+scripts/tests-start.sh
+```
 
 ## Docker
 
