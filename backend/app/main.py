@@ -2,7 +2,7 @@ import logging
 from collections.abc import AsyncGenerator
 from typing import Any
 
-import socketio
+import socketio  # type: ignore
 import uvicorn
 from fastapi import FastAPI
 from fastapi.concurrency import asynccontextmanager
@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from uvicorn.config import LOGGING_CONFIG
 
 from app.api.main import api_router
-from app.api.routes.ws_no_prefix import NoPrefixNamespace
+from app.api.routes.ws_no_prefix import AuthNamespace
 from app.core.config import settings
 from app.core.socket_io import sio
 from app.utils import custom_generate_unique_id
@@ -48,7 +48,7 @@ if settings.all_cors_origins:
     )
 
 # SocketIO
-sio.register_namespace(NoPrefixNamespace("/"))
+sio.register_namespace(AuthNamespace("/"))
 sio_asgi_app = socketio.ASGIApp(socketio_server=sio, other_asgi_app=app)
 
 app.add_route("/socket.io/", route=sio_asgi_app, methods=["GET", "POST"])

@@ -14,11 +14,15 @@ dependencies = [
     "opencv-python (>=4.11.0.86,<5.0.0.0)",
     "deepface (>=0.0.93,<0.0.94)",
     "psycopg (>=3.2.5,<4.0.0)",
-    "torch>=2.6.0",
     "numpy>=2.0.2",
-    "tf-keras>=2.18.0",
     "alembic>=1.14.1",
     "tenacity>=9.0.0",
+    "pgvector>=0.3.6",
+    "pyjwt>=2.10.1",
+    "tf-keras>=2.18.0",
+    "aiohttp==3.11.16",
+    "tensorflow[and-cuda]>=2.18.0",
+    "supabase-auth>=2.12.0",
 ]
 
 [build-system]
@@ -28,7 +32,7 @@ build-backend = "hatchling.build"
 [dependency-groups]
 dev = [
     "coverage>=7.6.12",
-    "isort>=6.0.0,<7",
+    "isort>=6.0.1",
     "mypy>=1.15.0",
     "pytest>=8.3.5",
     "ruff>=0.9.9",
@@ -42,6 +46,8 @@ package = false
 [tool.mypy]
 strict = true
 exclude = ["venv", ".venv", "alembic"]
+# disable_error_code = ["import-untyped"]
+
 
 [tool.pytest.ini_options]
 # Set additional command line options for pytest
@@ -76,11 +82,11 @@ exclude_lines = [
 ## Linter and formatter
 [tool.ruff]
 # cover and extend the default config in https=//docs.astral.sh/ruff/configuration/
-extend-exclude = ["alembic"]
 target-version = "py311"
 line-length = 79
 
 [tool.ruff.lint]
+exclude = ["alembic"]
 select = [
     "E",  # pycodestyle errors
     "W",  # pycodestyle warnings
@@ -109,10 +115,17 @@ ignore = [
     "W293",   # Blank line contains whitespace
 ]
 
-isort = { combine-as-imports = true, split-on-trailing-comma = false }
+
 
 # Avoid trying to fix flake8-bugbear (`B`) violations.
 unfixable = ["B"]
+
+[tool.isort]
+py_version = 39
+split_on_trailing_comma = true
+include_trailing_comma = true
+line_length = 79
+
 
 [tool.ruff.format]
 docstring-code-format = true

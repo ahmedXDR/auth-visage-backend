@@ -2,7 +2,7 @@ import secrets
 import warnings
 from typing import Annotated, Any, Literal, Self
 
-# from dotenv import load_dotenv
+from dotenv import load_dotenv
 from pydantic import (
     AnyUrl,
     BeforeValidator,
@@ -13,7 +13,7 @@ from pydantic import (
 from pydantic_core import MultiHostUrl
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# load_dotenv()
+load_dotenv("../.env", override=True)
 
 
 def parse_cors(v: Any) -> list[str] | str:
@@ -59,6 +59,11 @@ class Settings(BaseSettings):
     SUPABASE_URL: str
     # NOTE: super user key is service_role key instead of the anon key
     SUPABASE_KEY: str
+    SUPABASE_JWT_SECRET: str
+    JWT_ALGORITHM: str = "HS256"
+    JWT_lifespan: int = 3600  # In seconds
+
+    FACE_MATCH_THRESHOLD: float = 10  #
 
     POSTGRES_SERVER: str
     POSTGRES_PORT: int = 5432
