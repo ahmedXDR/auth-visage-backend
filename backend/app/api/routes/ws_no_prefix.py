@@ -33,19 +33,20 @@ class AuthNamespace(socketio.AsyncNamespace):  # type: ignore
         environ: dict[str, Any],
         auth: dict[str, Any],
     ) -> None:
-        auth_header = auth.get("Authorization")
+        if auth:
+            auth_header = auth.get("Authorization")
 
-        if auth_header:
-            jwt = auth_header.partition(" ")[2]
-            credentials = HTTPAuthorizationCredentials(
-                scheme="Bearer",
-                credentials=jwt,
-            )
-            user = await get_current_user(
-                await get_async_super_client(),
-                credentials,
-            )
-            await self.save_session(sid, {"user_id": user.id})
+            if auth_header:
+                jwt = auth_header.partition(" ")[2]
+                credentials = HTTPAuthorizationCredentials(
+                    scheme="Bearer",
+                    credentials=jwt,
+                )
+                user = await get_current_user(
+                    await get_async_super_client(),
+                    credentials,
+                )
+                await self.save_session(sid, {"user_id": user.id})
 
         logger.info(f"Connected: {sid}")
 
