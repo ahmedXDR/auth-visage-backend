@@ -33,8 +33,7 @@ class AuthNamespace(socketio.AsyncNamespace):  # type: ignore
         environ: dict[str, Any],
         auth: dict[str, Any],
     ) -> None:
-        # auth_header = auth.get("Authorization")
-        auth_header = "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwOi8vMTI3LjAuMC4xOjU0MzIxL2F1dGgvdjEiLCJzdWIiOiJkOWMzMmYzNy0yMTc4LTQ1OWYtYjMwZC04ZGZmYzdiNDIwODUiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzQ0NjQ1NjY4LCJpYXQiOjE3NDQ2NDIwNjgsImVtYWlsIjoiYWRtaW5AZXhhbXBsZS5jb20iLCJwaG9uZSI6IiIsImFwcF9tZXRhZGF0YSI6eyJwcm92aWRlciI6ImVtYWlsIiwicHJvdmlkZXJzIjpbImVtYWlsIl19LCJ1c2VyX21ldGFkYXRhIjp7ImVtYWlsIjoiYWRtaW5AZXhhbXBsZS5jb20iLCJlbWFpbF92ZXJpZmllZCI6dHJ1ZSwicGhvbmVfdmVyaWZpZWQiOmZhbHNlLCJzdWIiOiJkOWMzMmYzNy0yMTc4LTQ1OWYtYjMwZC04ZGZmYzdiNDIwODUifSwicm9sZSI6ImF1dGhlbnRpY2F0ZWQiLCJhYWwiOiJhYWwxIiwiYW1yIjpbeyJtZXRob2QiOiJwYXNzd29yZCIsInRpbWVzdGFtcCI6MTc0NDY0MjA2OH1dLCJzZXNzaW9uX2lkIjoiODc0ZmM0YTktMDcxNC00MzliLWJlN2ItNDlkNWRlMWU2YWI0IiwiaXNfYW5vbnltb3VzIjpmYWxzZX0.zYh4APn7WXNfmVvO8Vd_acFFII2dm62angdiidgka6g"
+        auth_header = auth.get("Authorization")
 
         if auth_header:
             jwt = auth_header.partition(" ")[2]
