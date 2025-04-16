@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 
 from app.api.deps import CurrentUser, SessionDep
 from app.crud import project
@@ -9,7 +9,10 @@ from app.models.project import Project, ProjectCreate, ProjectUpdate
 router = APIRouter(prefix="/projects", tags=["projects"])
 
 
-@router.post("/create-project")
+@router.post(
+    "/create-project",
+    response_model=Project,
+)
 async def create_project(
     project_in: ProjectCreate,
     user: CurrentUser,
@@ -18,27 +21,66 @@ async def create_project(
     return project.create(session, owner_id=UUID(user.id), obj_in=project_in)
 
 
-@router.get("/get-project/{id}")
-async def read_project_by_id(id: str, session: SessionDep) -> Project | None:
-    return project.get(session, id=UUID(id))
+@router.get(
+    "/get-project/{id}",
+    response_model=Project | None,
+)
+async def read_project_by_id(
+    id: str,
+    session: SessionDep,
+    user: CurrentUser,
+) -> Project | None:
+    project_obj = project.get(session, id=UUID(id))
+    if project_obj:
+        if project_obj.owner_id != UUID(user.id):
+            raise HTTPException(status_code=403, detail="Unauthorized")
+    return project_obj
 
 
-@router.get("/get-projects")
+@router.get(
+    "/get-projects",
+    response_model=list[Project],
+)
 async def read_projects(
-    session: SessionDep, skip: int = 0, limit: int = 100
+    session: SessionDep,
+    user: CurrentUser,
+    skip: int = 0,
+    limit: int = 100,
 ) -> list[Project]:
-    return list(project.get_multi(session, skip=skip, limit=limit))
+    projects = project.get_multi_by_owner(
+        session, owner_id=UUID(user.id), skip=skip, limit=limit
+    )
+    return list(projects)
 
 
-@router.put("/update-project/{id}")
+@router.put(
+    "/update-project/{id}",
+    response_model=Project | None,
+)
 async def update_project(
     id: str,
     project_in: ProjectUpdate,
+    user: CurrentUser,
     session: SessionDep,
 ) -> Project | None:
+    project_obj = project.get(session, id=UUID(id))
+    if project_obj:
+        if project_obj.owner_id != UUID(user.id):
+            raise HTTPException(status_code=403, detail="Unauthorized")
     return project.update(session, id=UUID(id), obj_in=project_in)
 
 
-@router.delete("/delete/{id}")
-async def delete_project(id: str, session: SessionDep) -> Project | None:
+@router.delete(
+    "/delete/{id}",
+    response_model=Project | None,
+)
+async def delete_project(
+    id: str,
+    user: CurrentUser,
+    session: SessionDep,
+) -> Project | None:
+    project_obj = project.get(session, id=UUID(id))
+    if project_obj:
+        if project_obj.owner_id != UUID(user.id):
+            raise HTTPException(status_code=403, detail="Unauthorized")
     return project.remove(session, id=UUID(id))
