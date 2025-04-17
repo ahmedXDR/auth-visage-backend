@@ -2,15 +2,10 @@ import io
 import logging
 from enum import Enum
 from typing import Any
-from uuid import UUID
 
 from deepface import DeepFace  # type: ignore
 from numpy import array
 from PIL import Image
-from sqlmodel import Session, text
-
-from app.core.config import settings
-from app.crud import face
 
 
 class Models(str, Enum):
@@ -54,7 +49,7 @@ def parse_frame(data: bytes) -> Image.Image:
         raise ValueError("Invalid image data")
 
 
-def get_largest_face_location(image: Image.Image) -> dict[str, Any]:
+def get_largest_face_location(image: Image.Image) -> dict[str, Any] | None:
     """
     Load an image file and return the location of the largest face in the
     image.
@@ -72,11 +67,14 @@ def get_largest_face_location(image: Image.Image) -> dict[str, Any]:
             the person itself
             instead of observer.
     """
-
-    face_objs = DeepFace.extract_faces(
-        array(image),
-        # anti_spoofing=True,
-    )
+    try:
+        face_objs = DeepFace.extract_faces(
+            array(image),
+            detector_backend=DETECTOR_BACKEND,
+        )
+    except ValueError as e:
+        logger.error(f"Error extracting faces: {e}")
+        return None
 
     largest_face = max(
         face_objs,
@@ -104,60 +102,15 @@ def embed_largest_face(
         embedding_objs = DeepFace.represent(
             array(image),
             model_name=MODEL_NAME,
+            detector_backend=DETECTOR_BACKEND,
+            max_faces=1,
         )
-
-        largest_face = max(
-            embedding_objs,
-            key=lambda face: (
-                face["facial_area"]["w"] * face["facial_area"]["h"]
-            ),
-        )
-
-        largest_face_embedding = largest_face["embedding"]
-
-        return largest_face_embedding
     except ValueError as e:
         logger.error(f"Error embedding largest face: {e}")
         return None
 
+    largest_face = embedding_objs[0]
 
-def verify_face(
-    session: Session,
-    embedding: list[float],
-) -> UUID | None:
-    """Verify the face embedding against the database
+    largest_face_embedding: list[float] = largest_face["embedding"]
 
-    Args:
-        session: The database session
-        embedding: The face embedding
-
-    Returns:
-        UUID | None: The user id
-    """
-
-    statement = text(f"""
-select *
-from (
-    select f.id, f.embedding <-> '{str(embedding)}' as distance
-    from face f
-) a
-where distance < {settings.FACE_MATCH_THRESHOLD}
-order by distance asc
-limit 1
-""")
-
-    result = session.exec(statement).all()
-
-    if not result:
-        return None
-
-    face_match_result = result[0]
-    if not face_match_result:
-        return None
-
-    face_obj = face.get(session=session, id=face_match_result[0])
-
-    if face_obj is None:
-        return None
-
-    return face_obj.owner_id
+    return largest_face_embedding

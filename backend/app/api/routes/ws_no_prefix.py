@@ -6,6 +6,7 @@ import socketio  # type: ignore
 from fastapi.security import HTTPAuthorizationCredentials
 
 from app.core.auth import get_async_super_client, get_current_user
+from app.core.config import settings
 from app.core.db import get_db
 from app.core.security import get_user_data
 from app.core.socket_io import sio
@@ -13,7 +14,7 @@ from app.crud import auth_code, face
 from app.models.auth_code import AuthCodeCreate
 from app.models.face import FaceCreate
 from app.utils import generate_auth_code
-from app.utils.detection import embed_largest_face, parse_frame, verify_face
+from app.utils.detection import embed_largest_face, parse_frame
 
 logger = logging.getLogger("uvicorn")
 
@@ -113,18 +114,20 @@ class AuthNamespace(socketio.AsyncNamespace):  # type: ignore
 
         session = next(get_db())
         if user_session.get("auth_type") == AuthTypes.LOGIN:
-            user_id = verify_face(
-                session=session,
+            match = face.face_match(
+                session,
                 embedding=largest_face_embedding,
+                threshold=settings.FACE_MATCH_THRESHOLD,
             )
-
-            if user_id is None:
+            if match is None:
                 await sio.emit(
                     "auth_error",
                     {"error": "Face not recognized"},
                     room=sid,
                 )
                 return
+
+            user_id = match.owner_id
 
             auth_obj = AuthCodeCreate(
                 code=generate_auth_code(),

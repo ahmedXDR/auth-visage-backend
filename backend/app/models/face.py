@@ -28,6 +28,11 @@ class Face(InDBBase, FaceBase, table=True):
     embedding: Any = Field(sa_type=Vector(128))
 
 
+class FaceMatch(SQLModel):
+    owner_id: uuid.UUID
+    distance: float
+
+
 # Properties to return via API, id is always required
 class FacePublic(FaceBase):
     id: uuid.UUID
