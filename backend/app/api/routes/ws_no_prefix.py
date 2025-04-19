@@ -35,7 +35,7 @@ class AuthNamespace(socketio.AsyncNamespace):  # type: ignore
         auth: dict[str, Any],
     ) -> None:
         if auth:
-            auth_header = auth.get("Authorization")
+            auth_header = auth.get("authorization")
 
             if auth_header:
                 jwt = auth_header.partition(" ")[2]
