@@ -3,7 +3,7 @@ from PIL import Image
 from app.utils.detection import embed_largest_face, get_largest_face_location
 
 
-def cache_models():
+def cache_models() -> None:
     fake_image = Image.new("RGB", (100, 100), color="red")
     get_largest_face_location(fake_image)
     embed_largest_face(fake_image)
