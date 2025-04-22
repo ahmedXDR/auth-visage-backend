@@ -35,7 +35,9 @@ class Settings(BaseSettings):
         extra="ignore",
     )
     API_V1_STR: str = "/api/v1"
-    SECRET_KEY: str = secrets.token_urlsafe(32)
+    JWT_SECRET: str = secrets.token_urlsafe(32)
+    JWT_ALGORITHM: str = "HS256"
+    JWT_lifespan: int = 3600  # In seconds
     ENVIRONMENT: Literal["local", "staging", "production"] = "local"
 
     # FRONTEND_HOST: str = "http://localhost:5173"
@@ -59,9 +61,6 @@ class Settings(BaseSettings):
     SUPABASE_URL: str
     # NOTE: super user key is service_role key instead of the anon key
     SUPABASE_KEY: str
-    SUPABASE_JWT_SECRET: str
-    JWT_ALGORITHM: str = "HS256"
-    JWT_lifespan: int = 3600  # In seconds
 
     FACE_MATCH_THRESHOLD: float = 10  #
 
@@ -99,7 +98,7 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _enforce_non_default_secrets(self) -> Self:
-        self._check_default_secret("SECRET_KEY", self.SECRET_KEY)
+        self._check_default_secret("JWT_SECRET", self.JWT_SECRET)
         self._check_default_secret("POSTGRES_PASSWORD", self.POSTGRES_PASSWORD)
         self._check_default_secret(
             "FIRST_SUPERUSER_PASSWORD", self.FIRST_SUPERUSER_PASSWORD

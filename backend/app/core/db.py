@@ -6,9 +6,19 @@ from sqlmodel import Session, create_engine, select
 
 from app.core.auth import get_super_client
 from app.core.config import settings
-from app.core.security import create_jwt_token, get_user_data, secure_token
-from app.models import RefreshToken, User, new_session
-from app.schemas import Token
+from app.core.security import create_jwt_token, get_user_data
+from app.crud import oauth_refresh_token, oauth_session
+from app.models import User
+from app.models.oauth_refresh_token import (
+    OAuthRefreshToken,
+    OAuthRefreshTokenCreate,
+)
+from app.models.oauth_session import (
+    OAuthSession,
+    OAuthSessionCreate,
+    OAuthSessionUpdate,
+)
+from app.schemas import OAuthToken
 
 # make sure all SQLModel models are imported (app.models) before initializing
 # DB otherwise, SQLModel might fail to initialize relationships properly.
@@ -49,30 +59,66 @@ def init_db(session: Session) -> None:
         assert response.session.access_token is not None
 
 
-async def generate_user_session(user_id: UUID) -> Token:
-    user_data = get_user_data(str(user_id))
-
-    jwt_token = create_jwt_token(user_data)
-
-    session = next(get_db())
-
-    new_session_obj = new_session(user_id)
-    session.add(new_session_obj)
-    session.commit()
-
-    refresh_token = secure_token()
-    refresh_token_obj = RefreshToken(
-        token=refresh_token,
-        user_id=user_id,
-        session_id=new_session_obj.id,
+def generate_oauth_token(
+    session: Session,
+    user_id: UUID,
+    project_id: UUID,
+) -> OAuthToken:
+    oauth_session_obj = oauth_session.create(
+        session,
+        obj_in=OAuthSessionCreate(
+            project_id=project_id,
+        ),
+        owner_id=user_id,
     )
-    session.add(refresh_token_obj)
-    session.commit()
 
-    token = Token(
-        access_token=jwt_token,
-        refresh_token=refresh_token,
+    oauth_refresh_token_obj = oauth_refresh_token.create(
+        session,
+        obj_in=OAuthRefreshTokenCreate(
+            oauth_session_id=oauth_session_obj.id,
+        ),
+        owner_id=user_id,
+    )
+
+    oauth_token = OAuthToken(
+        access_token=create_jwt_token(get_user_data(str(user_id))),
+        refresh_token=oauth_refresh_token_obj.token,
         expires_in=settings.JWT_lifespan,
     )
 
-    return token
+    return oauth_token
+
+
+def refresh_oauth_token(
+    session: Session,
+    refresh_token: OAuthRefreshToken,
+    oauth_session_obj: OAuthSession,
+) -> OAuthToken:
+    # create a new refresh token
+    new_oauth_refresh_token_obj = oauth_refresh_token.create(
+        session,
+        obj_in=OAuthRefreshTokenCreate(
+            oauth_session_id=oauth_session_obj.id,
+        ),
+        owner_id=refresh_token.owner_id,
+    )
+    oauth_session.update(
+        session,
+        id=oauth_session_obj.id,
+        obj_in=OAuthSessionUpdate(
+            refreshed_at=new_oauth_refresh_token_obj.created_at,
+        ),
+    )
+
+    # delete the old refresh token
+    oauth_refresh_token.remove(session, id=refresh_token.id)
+
+    oauth_token = OAuthToken(
+        access_token=create_jwt_token(
+            get_user_data(str(refresh_token.owner_id))
+        ),
+        refresh_token=new_oauth_refresh_token_obj.token,
+        expires_in=settings.JWT_lifespan,
+    )
+
+    return oauth_token

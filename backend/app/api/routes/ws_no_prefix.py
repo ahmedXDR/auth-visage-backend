@@ -10,7 +10,7 @@ from app.core.config import settings
 from app.core.db import get_db
 from app.core.security import get_user_data
 from app.core.socket_io import sio
-from app.crud import auth_code, face
+from app.crud import auth_code, face, oauth_session
 from app.models.auth_code import AuthCodeCreate
 from app.models.face import FaceCreate
 from app.utils import generate_auth_code
@@ -20,6 +20,7 @@ logger = logging.getLogger("uvicorn")
 
 
 class AuthTypes(str, Enum):
+    OAUTH = "oauth"
     LOGIN = "login"
     REGISTER = "register"
 
@@ -74,9 +75,10 @@ class AuthNamespace(socketio.AsyncNamespace):  # type: ignore
             return
 
         async with sio.session(sid) as session:
+            session["oauth_session_id"] = data.get("oauth_session_id", None)
             session["auth_type"] = auth_type
             session["code_challenge"] = code_challenge
-            session["pending_auth"] = True
+            session["pending_oauth"] = True
 
         await sio.emit("auth_started", room=sid)
 
@@ -84,7 +86,7 @@ class AuthNamespace(socketio.AsyncNamespace):  # type: ignore
         """Receives a video frame, processes it, and verifies authentication"""
         user_session = await self.get_session(sid)
 
-        if not user_session.get("pending_auth", False):
+        if not user_session.get("pending_oauth", False):
             await sio.emit(
                 "auth_error",
                 {"error": "No auth session"},
@@ -113,7 +115,25 @@ class AuthNamespace(socketio.AsyncNamespace):  # type: ignore
             return
 
         session = next(get_db())
-        if user_session.get("auth_type") == AuthTypes.LOGIN:
+        if user_session.get("auth_type") == AuthTypes.OAUTH:
+            oauth_session_id = user_session.get("oauth_session_id", None)
+            if oauth_session_id is None:
+                await sio.emit(
+                    "auth_error",
+                    {"error": "Missing oauth_session_id"},
+                    room=sid,
+                )
+                return
+
+            oauth_session_obj = oauth_session.get(session, id=oauth_session_id)
+            if oauth_session_obj is None:
+                await sio.emit(
+                    "auth_error",
+                    {"error": "Invalid oauth_session_id"},
+                    room=sid,
+                )
+                return
+
             match = face.face_match(
                 session,
                 embedding=largest_face_embedding,
@@ -132,6 +152,7 @@ class AuthNamespace(socketio.AsyncNamespace):  # type: ignore
             auth_obj = AuthCodeCreate(
                 code=generate_auth_code(),
                 code_challenge=user_session["code_challenge"],
+                project_id=oauth_session_obj.project_id,
             )
 
             auth_code.create(
@@ -148,8 +169,8 @@ class AuthNamespace(socketio.AsyncNamespace):  # type: ignore
                 room=sid,
             )
         elif user_session.get("auth_type") == AuthTypes.REGISTER:
-            user_id = user_session.get("user_id", None)
-            if user_id is None:
+            session_user_id = user_session.get("user_id", None)
+            if session_user_id is None:
                 await sio.emit(
                     "auth_error",
                     {"error": "Not authenticated"},
@@ -158,7 +179,7 @@ class AuthNamespace(socketio.AsyncNamespace):  # type: ignore
                 await sio.disconnect(sid)
                 return
 
-            user_data = get_user_data(str(user_id))
+            user_data = get_user_data(session_user_id)
             if not user_data:
                 await sio.emit(
                     "auth_error",
@@ -170,7 +191,7 @@ class AuthNamespace(socketio.AsyncNamespace):  # type: ignore
             # save face embedding
             face.create(
                 session=session,
-                owner_id=user_id,
+                owner_id=session_user_id,
                 obj_in=FaceCreate(
                     embedding=largest_face_embedding,
                 ),
@@ -178,7 +199,7 @@ class AuthNamespace(socketio.AsyncNamespace):  # type: ignore
 
             await sio.emit(
                 "auth_success",
-                {"user_id": user_id},
+                {"user_id": session_user_id},
                 room=sid,
             )
             await sio.disconnect(sid)
