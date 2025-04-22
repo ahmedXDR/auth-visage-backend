@@ -26,6 +26,11 @@ class FaceUpdate(SQLModel):
 # Data base model, database table inferred from class name
 class Face(InDBBase, FaceBase, table=True):
     embedding: Any = Field(sa_type=Vector(128))
+    owner_id: uuid.UUID = Field(
+        foreign_key="auth.users.id",
+        nullable=False,
+        ondelete="CASCADE",
+    )
 
 
 class FaceMatch(SQLModel):

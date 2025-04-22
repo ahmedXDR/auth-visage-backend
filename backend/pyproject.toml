@@ -87,7 +87,6 @@ target-version = "py311"
 line-length = 79
 
 [tool.ruff.lint]
-exclude = ["alembic"]
 select = [
     "E",  # pycodestyle errors
     "W",  # pycodestyle warnings

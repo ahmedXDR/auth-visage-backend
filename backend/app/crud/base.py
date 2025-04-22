@@ -12,7 +12,10 @@ UpdateSchemaType = TypeVar("UpdateSchemaType", bound=SQLModel)
 
 
 class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
-    def __init__(self, model: type[ModelType]):
+    def __init__(
+        self,
+        model: type[ModelType],
+    ):
         """
         CRUD object with default methods to Create, Read, Update, Delete
         (CRUD).
@@ -23,14 +26,23 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         """
         self.model = model
 
-    def get(self, session: Session, *, id: uuid.UUID) -> ModelType | None:
+    def get(
+        self,
+        session: Session,
+        *,
+        id: uuid.UUID,
+    ) -> ModelType | None:
         """Get a single record by id"""
         statement = select(self.model).where(self.model.id == id)
         result = session.exec(statement)
         return result.one_or_none()
 
     def get_multi(
-        self, session: Session, *, skip: int = 0, limit: int = 100
+        self,
+        session: Session,
+        *,
+        skip: int = 0,
+        limit: int = 100,
     ) -> Sequence[ModelType]:
         """Get multiple records with pagination"""
         statement = select(self.model).offset(skip).limit(limit)
@@ -41,18 +53,25 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         self,
         session: Session,
         *,
-        owner_id: uuid.UUID,
         obj_in: CreateSchemaType,
+        owner_id: uuid.UUID | None = None,
     ) -> ModelType:
-        """Create new record"""
-        db_obj = self.model(**dict(owner_id=owner_id, **obj_in.model_dump()))
+        """Create new record with optional owner_id"""
+        obj_data = obj_in.model_dump()
+        if owner_id is not None:
+            obj_data["owner_id"] = owner_id
+        db_obj = self.model(**obj_data)
         session.add(db_obj)
         session.commit()
         session.refresh(db_obj)
         return db_obj
 
     def update(
-        self, session: Session, *, id: uuid.UUID, obj_in: UpdateSchemaType
+        self,
+        session: Session,
+        *,
+        id: uuid.UUID,
+        obj_in: UpdateSchemaType,
     ) -> ModelType | None:
         """Update existing record"""
         db_obj = self.get(session, id=id)
@@ -65,7 +84,12 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             session.refresh(db_obj)
         return db_obj
 
-    def remove(self, session: Session, *, id: uuid.UUID) -> ModelType | None:
+    def remove(
+        self,
+        session: Session,
+        *,
+        id: uuid.UUID,
+    ) -> ModelType | None:
         """Remove a record"""
         obj = self.get(session, id=id)
         if obj:

@@ -1,4 +1,4 @@
-import uuid
+from uuid import UUID
 
 from sqlmodel import Session, text
 
@@ -8,14 +8,16 @@ from app.models.face import Face, FaceCreate, FaceMatch, FaceUpdate
 
 class CRUDFace(CRUDBase[Face, FaceCreate, FaceUpdate]):
     def create(
-        self, session: Session, *, owner_id: uuid.UUID, obj_in: FaceCreate
+        self,
+        session: Session,
+        *,
+        obj_in: FaceCreate,
+        owner_id: UUID | None = None,
     ) -> Face:
-        return super().create(session, owner_id=owner_id, obj_in=obj_in)
+        if owner_id is None:
+            raise ValueError("owner_id is required")
 
-    def update(
-        self, session: Session, *, id: uuid.UUID, obj_in: FaceUpdate
-    ) -> Face | None:
-        return super().update(session, id=id, obj_in=obj_in)
+        return super().create(session, obj_in=obj_in, owner_id=owner_id)
 
     def face_match(
         self, session: Session, *, embedding: list[float], threshold: float
