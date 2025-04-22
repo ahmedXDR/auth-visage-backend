@@ -10,7 +10,7 @@ from app.core.config import settings
 from app.core.db import get_db
 from app.core.security import get_user_data
 from app.core.socket_io import sio
-from app.crud import auth_code, face, oauth_session
+from app.crud import auth_code, face, oauth_session, user_project_link
 from app.models.auth_code import AuthCodeCreate
 from app.models.face import FaceCreate
 from app.utils import generate_auth_code
@@ -148,6 +148,19 @@ class AuthNamespace(socketio.AsyncNamespace):  # type: ignore
                 return
 
             user_id = match.owner_id
+
+            user_project_link_obj = user_project_link.get(
+                session,
+                owner_id=user_id,
+                project_id=oauth_session_obj.project_id,
+            )
+            if user_project_link_obj is None:
+                await sio.emit(
+                    "auth_error",
+                    {"error": "User not linked to project"},
+                    room=sid,
+                )
+                return
 
             auth_obj = AuthCodeCreate(
                 code=generate_auth_code(),

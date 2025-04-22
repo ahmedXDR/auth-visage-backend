@@ -5,6 +5,7 @@ from .oauth_session import OAuthSession
 from .project import Project
 from .trusted_origin import TrustedOrigin
 from .user import User
+from .user_project_link import UserProjectLink
 
 __all__ = [
     "User",
@@ -14,4 +15,5 @@ __all__ = [
     "OAuthSession",
     "Face",
     "TrustedOrigin",
+    "UserProjectLink",
 ]
