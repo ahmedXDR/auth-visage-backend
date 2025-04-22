@@ -12,7 +12,7 @@ class ProjectBase(SQLModel):
         min_length=1,
         max_length=255,
     )
-    discription: str | None = Field(
+    description: str | None = Field(
         default=None,
         min_length=1,
         max_length=2048,
@@ -36,7 +36,7 @@ class ProjectUpdate(SQLModel):
         min_length=1,
         max_length=255,
     )
-    discription: str | None = Field(
+    description: str | None = Field(
         default=None,
         min_length=1,
         max_length=2048,
@@ -50,7 +50,11 @@ class ProjectUpdate(SQLModel):
 
 # Database model, database table inferred from class name
 class Project(InDBBase, ProjectBase, table=True):
-    pass
+    owner_id: uuid.UUID = Field(
+        foreign_key="auth.users.id",
+        nullable=False,
+        ondelete="CASCADE",
+    )
 
 
 # Properties to return via API, id is always required

@@ -33,7 +33,7 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.Column(
-            "discription",
+            "description",
             sqlmodel.sql.sqltypes.AutoString(length=2048),
             nullable=True,
         ),
