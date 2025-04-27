@@ -14,7 +14,7 @@ router = APIRouter(prefix="/trusted-origins", tags=["trusted-origins"])
 
 
 @router.post(
-    "/create-trusted-origin",
+    "",
     response_model=TrustedOrigin,
 )
 async def create_trusted_origin(
@@ -36,7 +36,7 @@ async def create_trusted_origin(
 
 
 @router.get(
-    "/get-trusted-origin/{id}",
+    "/{id}",
     response_model=TrustedOrigin | None,
 )
 async def read_trusted_origin_by_id(
@@ -52,7 +52,7 @@ async def read_trusted_origin_by_id(
 
 
 @router.get(
-    "/get-trusted-origins",
+    "",
     response_model=list[TrustedOrigin],
 )
 async def read_trusted_origins(
@@ -73,7 +73,7 @@ async def read_trusted_origins(
 
 
 @router.put(
-    "/update-trusted-origin/{id}",
+    "/{id}",
     response_model=TrustedOrigin | None,
 )
 async def update_project(
@@ -100,7 +100,7 @@ async def update_project(
 
 
 @router.delete(
-    "/delete/{id}",
+    "/{id}",
     response_model=TrustedOrigin | None,
 )
 async def delete_trusted_origin(

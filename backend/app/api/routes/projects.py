@@ -10,7 +10,7 @@ router = APIRouter(prefix="/projects", tags=["projects"])
 
 
 @router.post(
-    "/create-project",
+    "",
     response_model=Project,
 )
 async def create_project(
@@ -22,7 +22,7 @@ async def create_project(
 
 
 @router.get(
-    "/get-project/{id}",
+    "/{id}",
     response_model=Project | None,
 )
 async def read_project_by_id(
@@ -38,7 +38,7 @@ async def read_project_by_id(
 
 
 @router.get(
-    "/get-projects",
+    "",
     response_model=list[Project],
 )
 async def read_projects(
@@ -54,7 +54,7 @@ async def read_projects(
 
 
 @router.put(
-    "/update-project/{id}",
+    "/{id}",
     response_model=Project | None,
 )
 async def update_project(
@@ -71,7 +71,7 @@ async def update_project(
 
 
 @router.delete(
-    "/delete/{id}",
+    "/{id}",
     response_model=Project | None,
 )
 async def delete_project(
