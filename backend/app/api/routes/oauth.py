@@ -18,7 +18,7 @@ from app.utils import sha256_base64url_encode
 router = APIRouter(prefix="/oauth", tags=["oauth"])
 
 
-@router.get(
+@router.post(
     "/create-session",
 )
 async def create_session(
@@ -34,10 +34,10 @@ async def create_session(
     request_origin = request.headers.get("origin")
     if request_origin is None:
         raise HTTPException(status_code=400, detail="Missing origin header")
-
-    trusted_origin_obj = trusted_origin.get_by_name(
+    trusted_origin_obj = trusted_origin.get_by_name_and_project(
         session,
         name=request_origin,
+        project_id=oauth_session_in.project_id,
     )
     if trusted_origin_obj is None:
         raise HTTPException(status_code=400, detail="Invalid origin")

@@ -30,14 +30,18 @@ class CRUDTrustedOrigin(
 
         return super().create(session, obj_in=obj_in, owner_id=owner_id)
 
-    def get_by_name(
+    def get_by_name_and_project(
         self,
         session: Session,
         *,
         name: str,
+        project_id: UUID,
     ) -> TrustedOrigin | None:
         """Get a single record by name"""
-        statement = select(self.model).where(self.model.name == name)
+        statement = select(self.model).where(
+            self.model.name == name,
+            self.model.project_id == project_id,
+        )
         result = session.exec(statement)
         return result.one_or_none()
 
