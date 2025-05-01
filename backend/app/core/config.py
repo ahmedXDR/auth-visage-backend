@@ -55,12 +55,24 @@ class Settings(BaseSettings):
             ]
         )
 
+    TRUSTED_LOGIN_ORIGINS: Annotated[
+        list[str] | str, BeforeValidator(parse_cors)
+    ] = []
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def all_trusted_login_origins(self) -> list[str]:
+        return [
+            str(origin).rstrip("/") for origin in self.TRUSTED_LOGIN_ORIGINS
+        ]
+
     PROJECT_NAME: str
 
     # DB
     SUPABASE_URL: str
     # NOTE: super user key is service_role key instead of the anon key
     SUPABASE_KEY: str
+    SUPABASE_JWT_SECRET: str
 
     FACE_MATCH_THRESHOLD: float = 10  #
 

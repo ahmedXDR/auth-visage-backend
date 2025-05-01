@@ -7,7 +7,7 @@ from fastapi.security import HTTPAuthorizationCredentials
 
 from app.core.auth import get_async_super_client, get_current_user
 from app.core.config import settings
-from app.core.db import get_db
+from app.core.db import generate_supabase_session, get_db
 from app.core.security import get_user_data
 from app.core.socket_io import sio
 from app.crud import auth_code, face, oauth_session, user_project_link
@@ -33,8 +33,9 @@ class AuthNamespace(socketio.AsyncNamespace):  # type: ignore
         self,
         sid: str,
         environ: dict[str, Any],
-        auth: dict[str, Any],
+        auth: dict[str, Any] | None = None,
     ) -> None:
+        user_id = None
         if auth:
             auth_header = auth.get("authorization")
 
@@ -44,11 +45,20 @@ class AuthNamespace(socketio.AsyncNamespace):  # type: ignore
                     scheme="Bearer",
                     credentials=jwt,
                 )
-                user = await get_current_user(
-                    await get_async_super_client(),
-                    credentials,
-                )
-                await self.save_session(sid, {"user_id": user.id})
+                user_id = (
+                    await get_current_user(
+                        await get_async_super_client(),
+                        credentials,
+                    )
+                ).id
+
+        await self.save_session(
+            sid,
+            {
+                "user_id": user_id,
+                "origin": environ.get("HTTP_ORIGIN", None),
+            },
+        )
 
         logger.info(f"Connected: {sid}")
 
@@ -115,7 +125,82 @@ class AuthNamespace(socketio.AsyncNamespace):  # type: ignore
             return
 
         session = next(get_db())
-        if user_session.get("auth_type") == AuthTypes.OAUTH:
+        if user_session.get("auth_type") == AuthTypes.REGISTER:
+            session_user_id = user_session.get("user_id", None)
+            if session_user_id is None:
+                await sio.emit(
+                    "auth_error",
+                    {"error": "Not authenticated"},
+                    room=sid,
+                )
+                await sio.disconnect(sid)
+                return
+
+            user_data = get_user_data(session_user_id)
+            if not user_data:
+                await sio.emit(
+                    "auth_error",
+                    {"error": "User not found"},
+                    room=sid,
+                )
+                await sio.disconnect(sid)
+
+            # save face embedding
+            face.create(
+                session=session,
+                owner_id=session_user_id,
+                obj_in=FaceCreate(
+                    embedding=largest_face_embedding,
+                ),
+            )
+
+            await sio.emit(
+                "auth_success",
+                {"user_id": session_user_id},
+                room=sid,
+            )
+            await sio.disconnect(sid)
+        elif user_session.get("auth_type") == AuthTypes.LOGIN:
+            origin = user_session.get("origin", None)
+            if origin is None:
+                await sio.emit(
+                    "auth_error",
+                    {"error": "Missing origin"},
+                    room=sid,
+                )
+                await sio.disconnect(sid)
+                return
+            if origin.rstrip("/") not in settings.all_trusted_login_origins:
+                await sio.emit(
+                    "auth_error",
+                    {"error": "Invalid origin"},
+                    room=sid,
+                )
+                await sio.disconnect(sid)
+                return
+
+            match = face.face_match(
+                session,
+                embedding=largest_face_embedding,
+                threshold=settings.FACE_MATCH_THRESHOLD,
+            )
+            if match is None:
+                await sio.emit(
+                    "auth_error",
+                    {"error": "Face not recognized"},
+                    room=sid,
+                )
+                return
+
+            user_id = match.owner_id
+            session_data = generate_supabase_session(user_id)
+            await sio.emit(
+                "auth_success",
+                session_data.model_dump(),
+                room=sid,
+            )
+
+        elif user_session.get("auth_type") == AuthTypes.OAUTH:
             oauth_session_id = user_session.get("oauth_session_id", None)
             if oauth_session_id is None:
                 await sio.emit(
@@ -181,41 +266,6 @@ class AuthNamespace(socketio.AsyncNamespace):  # type: ignore
                 },
                 room=sid,
             )
-        elif user_session.get("auth_type") == AuthTypes.REGISTER:
-            session_user_id = user_session.get("user_id", None)
-            if session_user_id is None:
-                await sio.emit(
-                    "auth_error",
-                    {"error": "Not authenticated"},
-                    room=sid,
-                )
-                await sio.disconnect(sid)
-                return
-
-            user_data = get_user_data(session_user_id)
-            if not user_data:
-                await sio.emit(
-                    "auth_error",
-                    {"error": "User not found"},
-                    room=sid,
-                )
-                await sio.disconnect(sid)
-
-            # save face embedding
-            face.create(
-                session=session,
-                owner_id=session_user_id,
-                obj_in=FaceCreate(
-                    embedding=largest_face_embedding,
-                ),
-            )
-
-            await sio.emit(
-                "auth_success",
-                {"user_id": session_user_id},
-                room=sid,
-            )
-            await sio.disconnect(sid)
 
     async def on_disconnect(self, sid: str) -> None:
         """Handles disconnection events"""

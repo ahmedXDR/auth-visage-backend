@@ -17,6 +17,7 @@ class OAuthTokenRequest(BaseModel):
 class Token(BaseModel):
     access_token: str | None = None
     refresh_token: str | None = None
+    expires_in: int | None = None
 
 
 # request

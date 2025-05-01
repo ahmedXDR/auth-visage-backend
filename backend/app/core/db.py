@@ -1,14 +1,19 @@
 import logging
 from collections.abc import Generator
+from secrets import token_urlsafe
 from uuid import UUID
 
 from sqlmodel import Session, create_engine, select
 
 from app.core.auth import get_super_client
 from app.core.config import settings
-from app.core.security import create_jwt_token, get_user_data
+from app.core.security import (
+    create_jwt_token,
+    create_supabase_jwt_token,
+    get_user_data,
+)
 from app.crud import oauth_refresh_token, oauth_session
-from app.models import User
+from app.models import RefreshToken, User
 from app.models.oauth_refresh_token import (
     OAuthRefreshToken,
     OAuthRefreshTokenCreate,
@@ -18,7 +23,8 @@ from app.models.oauth_session import (
     OAuthSessionCreate,
     OAuthSessionUpdate,
 )
-from app.schemas import OAuthToken
+from app.models.session import new_session
+from app.schemas import OAuthToken, Token
 
 # make sure all SQLModel models are imported (app.models) before initializing
 # DB otherwise, SQLModel might fail to initialize relationships properly.
@@ -122,3 +128,32 @@ def refresh_oauth_token(
     )
 
     return oauth_token
+
+
+def generate_supabase_session(user_id: UUID) -> Token:
+    user_data = get_user_data(str(user_id))
+
+    jwt_token = create_supabase_jwt_token(user_data)
+
+    session = next(get_db())
+
+    new_session_obj = new_session(user_id)
+    session.add(new_session_obj)
+    session.commit()
+
+    refresh_token = token_urlsafe(16)
+    refresh_token_obj = RefreshToken(
+        token=refresh_token,
+        user_id=user_id,
+        session_id=new_session_obj.id,
+    )
+    session.add(refresh_token_obj)
+    session.commit()
+
+    token = Token(
+        access_token=jwt_token,
+        refresh_token=refresh_token,
+        expires_in=settings.JWT_lifespan,
+    )
+
+    return token

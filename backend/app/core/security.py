@@ -24,6 +24,25 @@ def create_jwt_token(user_data: dict[str, Any]) -> str:
     )
 
 
+def create_supabase_jwt_token(user_data: dict[str, Any]) -> str:
+    """Create and sign a Supabase JWT token for the user."""
+    jwt_data = {
+        "sub": user_data["id"],
+        "aud": "authenticated",
+        "exp": datetime.datetime.now(datetime.UTC)
+        + datetime.timedelta(seconds=settings.JWT_lifespan),
+        "email": user_data.get("email", ""),
+        "role": "authenticated",
+        "aal": "aal1",
+    }
+
+    return jwt.encode(
+        jwt_data,
+        settings.SUPABASE_JWT_SECRET,
+        algorithm=settings.JWT_ALGORITHM,
+    )
+
+
 def get_user_data(user_id: str) -> dict[str, Any]:
     """Get user session from Supabase."""
     super_client = get_super_client()
