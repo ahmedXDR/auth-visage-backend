@@ -70,6 +70,9 @@ def generate_oauth_token(
     user_id: UUID,
     project_id: UUID,
 ) -> OAuthToken:
+    if not (user_data := get_user_data(user_id)):
+        raise ValueError("User not found")
+
     oauth_session_obj = oauth_session.create(
         session,
         obj_in=OAuthSessionCreate(
@@ -87,7 +90,7 @@ def generate_oauth_token(
     )
 
     oauth_token = OAuthToken(
-        access_token=create_jwt_token(get_user_data(str(user_id))),
+        access_token=create_jwt_token(user_data),
         refresh_token=oauth_refresh_token_obj.token,
         expires_in=settings.JWT_lifespan,
     )
@@ -100,6 +103,9 @@ def refresh_oauth_token(
     refresh_token: OAuthRefreshToken,
     oauth_session_obj: OAuthSession,
 ) -> OAuthToken:
+    if not (user_data := get_user_data(refresh_token.owner_id)):
+        raise ValueError("User not found")
+
     # create a new refresh token
     new_oauth_refresh_token_obj = oauth_refresh_token.create(
         session,
@@ -120,9 +126,7 @@ def refresh_oauth_token(
     oauth_refresh_token.remove(session, id=refresh_token.id)
 
     oauth_token = OAuthToken(
-        access_token=create_jwt_token(
-            get_user_data(str(refresh_token.owner_id))
-        ),
+        access_token=create_jwt_token(user_data),
         refresh_token=new_oauth_refresh_token_obj.token,
         expires_in=settings.JWT_lifespan,
     )
@@ -131,7 +135,8 @@ def refresh_oauth_token(
 
 
 def generate_supabase_session(user_id: UUID) -> Token:
-    user_data = get_user_data(str(user_id))
+    if not (user_data := get_user_data(user_id)):
+        raise ValueError("User not found")
 
     jwt_token = create_supabase_jwt_token(user_data)
 

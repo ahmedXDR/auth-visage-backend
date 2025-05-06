@@ -1,8 +1,9 @@
 import datetime
 from typing import Any
+from uuid import UUID
 
 import jwt
-from fastapi import HTTPException
+from supabase import AuthError
 
 from app.core.auth import get_super_client
 from app.core.config import settings
@@ -43,12 +44,13 @@ def create_supabase_jwt_token(user_data: dict[str, Any]) -> str:
     )
 
 
-def get_user_data(user_id: str) -> dict[str, Any]:
+def get_user_data(user_id: str | UUID) -> dict[str, Any] | None:
     """Get user session from Supabase."""
     super_client = get_super_client()
-    user = super_client.auth.admin.get_user_by_id(user_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+    try:
+        user = super_client.auth.admin.get_user_by_id(str(user_id))
+    except AuthError:
+        return None
 
     user_data: dict[str, Any] = user.user.model_dump()
     return user_data
