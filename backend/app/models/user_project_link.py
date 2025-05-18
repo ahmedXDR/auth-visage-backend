@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from sqlmodel import TIMESTAMP, Field, SQLModel
+from sqlmodel import TIMESTAMP, Field, SQLModel, text
 
 from app.utils import utcnow
 
@@ -40,6 +40,9 @@ class UserProjectLink(UserProjectLinkBase, table=True):
         default_factory=utcnow,
         nullable=False,
         sa_type=TIMESTAMP(timezone=True),
+        sa_column_kwargs={
+            "server_default": text("timezone('utc', now())"),
+        },
     )  # type: ignore
     last_sign_in: datetime | None = Field(
         default_factory=None,
