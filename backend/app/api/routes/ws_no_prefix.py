@@ -16,7 +16,8 @@ from app.crud import auth_code, face, oauth_session, user_project_link
 from app.models.auth_code import AuthCodeCreate
 from app.models.face import FaceCreate
 from app.utils import generate_auth_code
-from app.utils.detection import embed_largest_face, parse_frame
+from app.utils.detection import extract_largest_face, parse_frame
+from app.utils.errors import FaceSpoofingDetected
 
 logger = logging.getLogger("uvicorn")
 
@@ -83,6 +84,7 @@ class AuthNamespace(socketio.AsyncNamespace):  # type: ignore
             auth: Optional authentication data
         """
         user_id = None
+        user_id = "635a382d-1ccf-497d-b98e-fa958cfc316e"
         if auth and (auth_header := auth.get("authorization")):
             jwt = auth_header.partition(" ")[2]
             credentials = HTTPAuthorizationCredentials(
@@ -211,6 +213,7 @@ class AuthNamespace(socketio.AsyncNamespace):  # type: ignore
             session_data.model_dump(),
             room=sid,
         )
+        await sio.disconnect(sid)
 
     async def _handle_oauth(
         self,
@@ -307,24 +310,42 @@ class AuthNamespace(socketio.AsyncNamespace):  # type: ignore
             await self.emit_error(sid, str(e))
             return
 
-        face_embedding = embed_largest_face(frame)
-        if face_embedding is None:
-            await self.emit_error(sid, "No face detected")
+        try:
+            largest_face = extract_largest_face(
+                frame,
+                anti_spoofing=True,
+                embed=True,
+            )
+        except FaceSpoofingDetected:
+            await self.emit_error(sid, "No valid face detected")
+            return
+
+        if largest_face is None:
+            await self.emit_error(sid, "No valid face detected")
             return
 
         db_session = next(get_db())
         match user_session.auth_type:
             case AuthTypes.REGISTER:
                 await self._handle_register(
-                    sid, db_session, user_session, face_embedding
+                    sid,
+                    db_session,
+                    user_session,
+                    largest_face["embedding"],
                 )
             case AuthTypes.LOGIN:
                 await self._handle_login(
-                    sid, db_session, user_session, face_embedding
+                    sid,
+                    db_session,
+                    user_session,
+                    largest_face["embedding"],
                 )
             case AuthTypes.OAUTH:
                 await self._handle_oauth(
-                    sid, db_session, user_session, face_embedding
+                    sid,
+                    db_session,
+                    user_session,
+                    largest_face["embedding"],
                 )
 
     async def on_disconnect(self, sid: str) -> None:

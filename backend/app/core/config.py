@@ -74,7 +74,8 @@ class Settings(BaseSettings):
     SUPABASE_KEY: str
     SUPABASE_JWT_SECRET: str
 
-    FACE_MATCH_THRESHOLD: float = 10  #
+    FACE_MATCH_THRESHOLD: float = 10
+    ANTI_SPOOF_THRESHOLD: float = 0.90
 
     POSTGRES_SERVER: str
     POSTGRES_PORT: int = 5432

@@ -7,6 +7,9 @@ from deepface import DeepFace  # type: ignore
 from numpy import array
 from PIL import Image
 
+from app.core.config import settings
+from app.utils.errors import FaceSpoofingDetected
+
 
 class Models(str, Enum):
     VGG_FACE = "VGG-Face"
@@ -37,7 +40,7 @@ logger = logging.getLogger("uvicorn")
 
 
 MODEL_NAME = Models.FACENET
-DETECTOR_BACKEND = Backends.OPENCV
+DETECTOR_BACKEND = Backends.RETINA_FACE
 
 
 def parse_frame(data: bytes) -> Image.Image:
@@ -49,68 +52,78 @@ def parse_frame(data: bytes) -> Image.Image:
         raise ValueError("Invalid image data")
 
 
-def get_largest_face_location(image: Image.Image) -> dict[str, Any] | None:
+def extract_largest_face(
+    image: Image.Image,
+    anti_spoofing=False,
+    embed=False,
+) -> dict[str, Any] | None:
     """
-    Load an image file and return the location of the largest face in the
-    image.
+    Extract the largest face from a given image
 
     Args:
-        image: image file name or file object to load.
+        image (Image.Image): Image object.
+        anti_spoofing (boolean): Flag to enable anti spoofing (default is False).
+        embed (boolean): Flag to embed the extracted face (default is False).
 
     Returns:
-        result (Dict[str, Any]): The detected face's regions as a dictionary
-        containing:
-        - keys 'x', 'y', 'w', 'h' with int values
-        - keys 'left_eye', 'right_eye' with a tuple of 2 ints as values.
-        left and right eyes
-            are eyes on the left and right respectively with respect to
-            the person itself
-            instead of observer.
+        results (Dict[str, Any]): A dictionary which contains:
+
+        - "face" (np.ndarray): The detected face as a NumPy array.
+
+        - "facial_area" (Dict[str, Any]): The detected face's regions as a dictionary containing:
+            - keys 'x', 'y', 'w', 'h' with int values
+            - keys 'left_eye', 'right_eye' with a tuple of 2 ints as values. left and right eyes
+                are eyes on the left and right respectively with respect to the person itself
+                instead of observer.
+
+        - "confidence" (float): The confidence score associated with the detected face.
+
+        - "is_real" (boolean): antispoofing analyze result. this key is just available in the
+            result only if anti_spoofing is set to True in input arguments.
+
+        - "antispoof_score" (float): score of antispoofing analyze result. this key is
+            just available in the result only if anti_spoofing is set to True in input arguments.
+
+        - "embedding" (List[float]): Multidimensional vector representing facial features.
+            The number of dimensions varies based on the reference model (e.g., FaceNet
+            returns 128 dimensions, VGG-Face returns 4096 dimensions).
     """
     try:
         face_objs = DeepFace.extract_faces(
             array(image),
             detector_backend=DETECTOR_BACKEND,
+            align=True,
+            anti_spoofing=anti_spoofing,
         )
     except ValueError as e:
-        logger.error(f"Error extracting faces: {e}")
+        logger.error(f"Error extracting face: {e}")
         return None
 
-    largest_face = max(
+    largest_face_obj = max(
         face_objs,
-        key=lambda face: face["facial_area"]["w"] * face["facial_area"]["h"],
+        key=lambda face_obj: face_obj["facial_area"]["w"]
+        * face_obj["facial_area"]["h"],
     )
-    largest_facial_area: dict[str, Any] = largest_face["facial_area"]
 
-    return largest_facial_area
+    if (
+        anti_spoofing
+        and not largest_face_obj["is_real"]
+        and largest_face_obj["antispoof_score"] > settings.ANTI_SPOOF_THRESHOLD
+    ):
+        raise FaceSpoofingDetected("Face spoofing detected")
 
+    if embed:
+        try:
+            embedding = DeepFace.represent(
+                largest_face_obj["face"],
+                model_name=MODEL_NAME,
+                detector_backend="skip",
+                max_faces=1,
+            )[0]["embedding"]
 
-def embed_largest_face(
-    image: Image.Image,
-) -> list[float] | None:
-    """
-    Load an image file and return the embedding of the largest face in the
-    image.
+            largest_face_obj["embedding"] = embedding
+        except ValueError as e:
+            logger.error(f"Error embedding face: {e}")
+            return None
 
-    Args:
-        image: image file name or file object to load.
-
-    Returns:
-        result (list[float]): The detected face's embedding.
-    """
-    try:
-        embedding_objs = DeepFace.represent(
-            array(image),
-            model_name=MODEL_NAME,
-            detector_backend=DETECTOR_BACKEND,
-            max_faces=1,
-        )
-    except ValueError as e:
-        logger.error(f"Error embedding largest face: {e}")
-        return None
-
-    largest_face = embedding_objs[0]
-
-    largest_face_embedding: list[float] = largest_face["embedding"]
-
-    return largest_face_embedding
+    return largest_face_obj

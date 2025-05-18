@@ -1,12 +1,18 @@
 from PIL import Image
 
-from app.utils.detection import embed_largest_face, get_largest_face_location
+from app.utils.detection import extract_largest_face
 
 
 def cache_models() -> None:
-    fake_image = Image.new("RGB", (100, 100), color="red")
-    get_largest_face_location(fake_image)
-    embed_largest_face(fake_image)
+    fake_image = Image.new(
+        "RGB",
+        (100, 100),
+        color="red",
+    )
+    extract_largest_face(
+        fake_image,
+        embed=True,
+    )
 
 
 if __name__ == "__main__":
