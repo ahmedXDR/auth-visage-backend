@@ -12,7 +12,13 @@ from app.core.auth import get_async_super_client, get_current_user
 from app.core.config import settings
 from app.core.db import generate_supabase_session, get_db
 from app.core.socket_io import sio
-from app.crud import auth_code, face, oauth_session, user_project_link
+from app.crud import (
+    auth_code,
+    face,
+    oauth_session,
+    project,
+    user_project_link,
+)
 from app.models.auth_code import AuthCodeCreate
 from app.models.face import FaceCreate
 from app.utils import generate_auth_code
@@ -265,7 +271,15 @@ class AuthNamespace(socketio.AsyncNamespace):  # type: ignore
                 project_id=oauth_session_obj.project_id,
             )
         ):
-            await self.emit_error(sid, "User not linked to project")
+            await self.emit(
+                "capture_consent",
+                {
+                    "project": project.get(
+                        db_session,
+                        id=oauth_session_obj.project_id,
+                    ),
+                },
+            )
             return
 
         auth_obj = AuthCodeCreate(
