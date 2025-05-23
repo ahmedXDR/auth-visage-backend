@@ -74,8 +74,14 @@ class Settings(BaseSettings):
     SUPABASE_KEY: str
     SUPABASE_JWT_SECRET: str
 
-    FACE_MATCH_THRESHOLD: float = 10
+    FACE_MATCH_THRESHOLD: float = 10  # distance
     ANTI_SPOOF_THRESHOLD: float = 0.90
+
+    # liveness detection
+    LIVENESS_MODEL_PATH: str = (
+        "./app/utils/antispoofing/model/liveness_model.onnx"
+    )
+    LIVENESS_THRESHOLD: float = 0.5
 
     POSTGRES_SERVER: str
     POSTGRES_PORT: int = 5432

@@ -96,7 +96,8 @@ def extract_largest_face(
             anti_spoofing=anti_spoofing,
         )
     except ValueError as e:
-        logger.error(f"Error extracting face: {e}")
+        if "face could not be detected" not in str(e).lower():
+            logger.error(f"Error extracting face: {e}")
         return None
 
     largest_face_obj = max(

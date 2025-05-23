@@ -1,17 +1,14 @@
 import logging
-from enum import Enum
 from typing import Any
 from uuid import UUID
 
 import socketio  # type: ignore
 from fastapi.security import HTTPAuthorizationCredentials
-from pydantic import BaseModel
 from sqlmodel import Session
 
 from app.core.auth import get_async_super_client, get_current_user
 from app.core.config import settings
 from app.core.db import generate_supabase_session, get_db
-from app.core.socket_io import sio
 from app.crud import (
     auth_code,
     face,
@@ -21,28 +18,13 @@ from app.crud import (
 )
 from app.models.auth_code import AuthCodeCreate
 from app.models.face import FaceCreate
+from app.schemas.auth import AuthTypes, SioUserSession
 from app.utils import generate_auth_code
+from app.utils.antispoofing.inference import infer_liveness_from_frames
 from app.utils.detection import extract_largest_face, parse_frame
 from app.utils.errors import FaceSpoofingDetected
 
 logger = logging.getLogger("uvicorn")
-
-
-class AuthTypes(str, Enum):
-    """Authentication types supported by the WebSocket interface."""
-
-    OAUTH = "oauth"
-    LOGIN = "login"
-    REGISTER = "register"
-
-
-class SioUserSession(BaseModel):
-    user_id: str | None = None
-    origin: str | None = None
-    pending_oauth: bool = False
-    auth_type: AuthTypes | None = None
-    code_challenge: str | None = None
-    oauth_session_uuid: UUID | None = None
 
 
 class AuthNamespace(socketio.AsyncNamespace):  # type: ignore
@@ -68,13 +50,13 @@ class AuthNamespace(socketio.AsyncNamespace):  # type: ignore
             error: The error message to send
             disconnect: Whether to disconnect the client after sending the error
         """
-        await sio.emit(
+        await self.emit(
             "auth_error",
             {"error": error},
             room=sid,
         )
         if disconnect:
-            await sio.disconnect(sid)
+            await self.disconnect(sid)
 
     async def on_connect(
         self,
@@ -90,7 +72,6 @@ class AuthNamespace(socketio.AsyncNamespace):  # type: ignore
             auth: Optional authentication data
         """
         user_id = None
-        user_id = "635a382d-1ccf-497d-b98e-fa958cfc316e"
         if auth and (auth_header := auth.get("authorization")):
             jwt = auth_header.partition(" ")[2]
             credentials = HTTPAuthorizationCredentials(
@@ -141,13 +122,13 @@ class AuthNamespace(socketio.AsyncNamespace):  # type: ignore
                 await self.emit_error(sid, "Invalid oauth_session_id")
                 return
 
-        async with sio.session(sid) as session:
+        async with self.session(sid) as session:
             session.oauth_session_uuid = oauth_session_uuid
             session.auth_type = auth_type
             session.code_challenge = data.get("code_challenge")
             session.pending_oauth = True
 
-        await sio.emit("auth_started", room=sid)
+        await self.emit("auth_started", room=sid)
 
     async def _handle_register(
         self,
@@ -174,12 +155,12 @@ class AuthNamespace(socketio.AsyncNamespace):  # type: ignore
             obj_in=FaceCreate(embedding=face_embedding),
         )
 
-        await sio.emit(
+        await self.emit(
             "auth_success",
             {"user_id": session_user_id},
             room=sid,
         )
-        await sio.disconnect(sid)
+        await self.disconnect(sid)
 
     async def _handle_login(
         self,
@@ -214,12 +195,12 @@ class AuthNamespace(socketio.AsyncNamespace):  # type: ignore
             return
 
         session_data = generate_supabase_session(match.owner_id)
-        await sio.emit(
+        await self.emit(
             "auth_success",
             session_data.model_dump(),
             room=sid,
         )
-        await sio.disconnect(sid)
+        await self.disconnect(sid)
 
     async def _handle_oauth(
         self,
@@ -294,7 +275,7 @@ class AuthNamespace(socketio.AsyncNamespace):  # type: ignore
             obj_in=auth_obj,
         )
 
-        await sio.emit(
+        await self.emit(
             "auth_success",
             {"auth_code": auth_obj.code},
             room=sid,
@@ -307,6 +288,8 @@ class AuthNamespace(socketio.AsyncNamespace):  # type: ignore
             sid: Session ID of the client
             data: Raw video frame data
         """
+        await self.emit("set_orientation", "left", room=sid)
+
         user_session = SioUserSession(
             **(await self.get_session(sid)).model_dump()
         )
@@ -324,6 +307,23 @@ class AuthNamespace(socketio.AsyncNamespace):  # type: ignore
             await self.emit_error(sid, str(e))
             return
 
+        async with self.session(sid) as session:
+            if len(session.liveness_frames) < 4:
+                session.liveness_frames.append(frame)
+                return
+            elif len(session.liveness_frames) == 4:
+                session.liveness_frames.append(frame)
+            else:
+                session.liveness_frames = [frame]
+                return
+
+        liveness_score = infer_liveness_from_frames(
+            [user_session.liveness_frames]
+        )[0]
+        if liveness_score < settings.LIVENESS_THRESHOLD:
+            await self.emit_error(sid, "Liveness check failed")
+            return
+
         try:
             largest_face = extract_largest_face(
                 frame,
@@ -331,7 +331,7 @@ class AuthNamespace(socketio.AsyncNamespace):  # type: ignore
                 embed=True,
             )
         except FaceSpoofingDetected:
-            await self.emit_error(sid, "No valid face detected")
+            await self.emit_error(sid, "Spoofing detected")
             return
 
         if largest_face is None:

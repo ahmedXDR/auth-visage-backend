@@ -1,3 +1,7 @@
+from enum import Enum
+from uuid import UUID
+
+from PIL import Image
 from pydantic import BaseModel
 from supabase_auth import User, UserAttributes  # type: ignore
 
@@ -53,3 +57,24 @@ class UserOut(Token):
 # Properties properties stored in DB
 class UserInDB(User):  # type: ignore
     pass
+
+
+class AuthTypes(str, Enum):
+    """Authentication types supported by the WebSocket interface."""
+
+    OAUTH = "oauth"
+    LOGIN = "login"
+    REGISTER = "register"
+
+
+class SioUserSession(BaseModel):
+    user_id: str | None = None
+    origin: str | None = None
+    pending_oauth: bool = False
+    auth_type: AuthTypes | None = None
+    code_challenge: str | None = None
+    oauth_session_uuid: UUID | None = None
+    liveness_frames: list[Image.Image] = []
+
+    class Config:
+        arbitrary_types_allowed = True
