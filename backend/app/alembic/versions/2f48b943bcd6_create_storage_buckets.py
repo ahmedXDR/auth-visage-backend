@@ -32,7 +32,13 @@ def upgrade() -> None:
     """)
 
     op.execute("""
-        create policy "Give users access to own avatars' folder" on storage.objects for all to public
+        create policy "Give users access to own avatars' folder" on storage.objects for all to using (
+        bucket_id = 'avatars'
+        and (
+            select
+            auth.uid ()::text
+        ) = (storage.foldername (name)) [1]
+        )
         with
         check (
             bucket_id = 'avatars'
@@ -43,7 +49,13 @@ def upgrade() -> None:
         )
     """)
     op.execute("""
-        create policy "Give users access to own projects' folder" on storage.objects for all to public
+        create policy "Give users access to own projects' folder" on storage.objects for all to public using (
+        bucket_id = 'projects'
+        and (
+            select
+            auth.uid ()::text
+        ) = (storage.foldername (name)) [1]
+        )
         with
         check (
             bucket_id = 'projects'
