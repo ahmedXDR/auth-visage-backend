@@ -50,7 +50,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync
 
 # Pre-download DeepFace models
-RUN python -m app.utils.cahe_models
+RUN python -m app.utils.cache_models
 
 # Set the default command
 # Ref: https://fastapi.tiangolo.com/deployment/docker/
