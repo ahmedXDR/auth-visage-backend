@@ -145,36 +145,28 @@ class AuthNamespace(socketio.AsyncNamespace):  # type: ignore
             db_session: Database session
             face_embedding: Face embedding vector
         """
-        async with self.session(sid) as session:
-            if not (session_user_id := session.user_id):
-                await self.emit_error(
-                    sid, "Not authenticated", disconnect=True
-                )
-                return
-
-            if session.face_data is None:
-                if face_orientation != FaceOrientation.CENTER:
-                    await self.emit(
-                        "set_orientation",
-                        FaceOrientation.CENTER.value,
-                        room=sid,
+        try:
+            async with self.session(sid) as session:
+                if not (session_user_id := session.user_id):
+                    await self.emit_error(
+                        sid, "Not authenticated", disconnect=True
                     )
                     return
 
-                session.face_data = FaceCreate(
-                    center_embedding=face_embedding,
-                    left_embedding=None,
-                    right_embedding=None,
-                )
-                await self.emit(
-                    "set_orientation",
-                    FaceOrientation.RIGHT.value,
-                    room=sid,
-                )
-                return
+                if session.face_data is None:
+                    if face_orientation != FaceOrientation.CENTER:
+                        await self.emit(
+                            "set_orientation",
+                            FaceOrientation.CENTER.value,
+                            room=sid,
+                        )
+                        return
 
-            if session.face_data.right_embedding is None:
-                if face_orientation != FaceOrientation.RIGHT:
+                    session.face_data = FaceCreate(
+                        center_embedding=face_embedding,
+                        left_embedding=None,
+                        right_embedding=None,
+                    )
                     await self.emit(
                         "set_orientation",
                         FaceOrientation.RIGHT.value,
@@ -182,16 +174,16 @@ class AuthNamespace(socketio.AsyncNamespace):  # type: ignore
                     )
                     return
 
-                session.face_data.right_embedding = face_embedding
-                await self.emit(
-                    "set_orientation",
-                    FaceOrientation.LEFT.value,
-                    room=sid,
-                )
-                return
+                if session.face_data.right_embedding is None:
+                    if face_orientation != FaceOrientation.RIGHT:
+                        await self.emit(
+                            "set_orientation",
+                            FaceOrientation.RIGHT.value,
+                            room=sid,
+                        )
+                        return
 
-            if session.face_data.left_embedding is None:
-                if face_orientation == FaceOrientation.LEFT:
+                    session.face_data.right_embedding = face_embedding
                     await self.emit(
                         "set_orientation",
                         FaceOrientation.LEFT.value,
@@ -199,20 +191,31 @@ class AuthNamespace(socketio.AsyncNamespace):  # type: ignore
                     )
                     return
 
-                session.face_data.left_embedding = face_embedding
+                if session.face_data.left_embedding is None:
+                    if face_orientation != FaceOrientation.LEFT:
+                        await self.emit(
+                            "set_orientation",
+                            FaceOrientation.LEFT.value,
+                            room=sid,
+                        )
+                        return
 
-            face.create(
-                session=db_session,
-                owner_id=UUID(session_user_id),
-                obj_in=session.face_data,
-            )
+                    session.face_data.left_embedding = face_embedding
 
-            await self.emit(
-                "auth_success",
-                {"user_id": session_user_id},
-                room=sid,
-            )
-            await self.disconnect(sid)
+                face.create(
+                    session=db_session,
+                    owner_id=UUID(session_user_id),
+                    obj_in=session.face_data,
+                )
+
+                await self.emit(
+                    "auth_success",
+                    {"user_id": session_user_id},
+                    room=sid,
+                )
+                await self.disconnect(sid)
+        except KeyError:
+            return
 
     async def _handle_login(
         self,
