@@ -4,9 +4,10 @@ import pathlib
 
 import onnxruntime as ort  # type: ignore
 import torch
-from backend.app.core.config import Settings  # type: ignore
 from PIL import Image
 from torchvision import transforms
+
+from app.core.config import settings
 
 # -----------------------------------------------------------------------------
 # Pre-processing identical to training
@@ -74,7 +75,6 @@ def parse_args():
 
 def infer_liveness_from_frames(
     list_of_frame_lists: list[list[Image.Image]],
-    onnx_model_path: str = Settings.LIVENESS_MODEL_PATH,
 ) -> list[float]:
     """
     Run liveness detection on a batch of frame sequences.
@@ -89,7 +89,7 @@ def infer_liveness_from_frames(
     """
     # Load ONNX model
     sess = ort.InferenceSession(
-        str(pathlib.Path(onnx_model_path).expanduser()),
+        str(object=pathlib.Path(settings.LIVENESS_MODEL_PATH).expanduser()),
         providers=["CPUExecutionProvider"],
     )
     input_name = sess.get_inputs()[0].name
