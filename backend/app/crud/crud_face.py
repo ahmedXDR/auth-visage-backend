@@ -3,7 +3,13 @@ from uuid import UUID
 from sqlmodel import Session, text
 
 from app.crud.base import CRUDBase
-from app.models.face import Face, FaceCreate, FaceMatch, FaceUpdate
+from app.models.face import (
+    Face,
+    FaceCreate,
+    FaceMatch,
+    FaceOrientation,
+    FaceUpdate,
+)
 
 
 class CRUDFace(CRUDBase[Face, FaceCreate, FaceUpdate]):
@@ -20,18 +26,25 @@ class CRUDFace(CRUDBase[Face, FaceCreate, FaceUpdate]):
         return super().create(session, obj_in=obj_in, owner_id=owner_id)
 
     def face_match(
-        self, session: Session, *, embedding: list[float], threshold: float
+        self,
+        session: Session,
+        *,
+        embedding: list[float],
+        face_orientation: FaceOrientation = FaceOrientation.CENTER,
+        threshold: float,
     ) -> FaceMatch | None:
-        statement = text(f"""
+        statement = text(
+            f"""
 select *
 from (
-    select f.owner_id, f.embedding <-> '{str(embedding)}' as distance
+    select f.owner_id, f.{face_orientation.value}_embedding <-> '{str(embedding)}' as distance
     from face f
 ) a
 where distance < {threshold}
 order by distance asc
 limit 1
-""")
+"""
+        )
         result = session.execute(statement).first()  # type: ignore
 
         if result is None:

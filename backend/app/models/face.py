@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime
+from enum import Enum
 from typing import Any
 
 from pgvector.sqlalchemy import Vector  # type: ignore
@@ -10,7 +11,9 @@ from app.models.base import InDBBase
 
 # Shared properties
 class FaceBase(SQLModel):
-    embedding: list[float]
+    center_embedding: list[float]
+    left_embedding: list[float] | None = None
+    right_embedding: list[float] | None = None
 
 
 # Properties to receive on face creation
@@ -20,12 +23,24 @@ class FaceCreate(FaceBase):
 
 # Properties to receive on face update
 class FaceUpdate(SQLModel):
-    embedding: list[float] | None = None
+    center_embedding: list[float] | None = None
+    left_embedding: list[float] | None = None
+    right_embedding: list[float] | None = None
 
 
 # Data base model, database table inferred from class name
 class Face(InDBBase, FaceBase, table=True):
-    embedding: Any = Field(sa_type=Vector(128))
+    center_embedding: Any = Field(sa_type=Vector(128))
+    left_embedding: Any = Field(
+        sa_type=Vector(128),
+        default=None,
+        nullable=True,
+    )
+    right_embedding: Any = Field(
+        sa_type=Vector(128),
+        default=None,
+        nullable=True,
+    )
     owner_id: uuid.UUID = Field(
         foreign_key="auth.users.id",
         nullable=False,
@@ -48,3 +63,9 @@ class FacePublic(FaceBase):
 class FacesPublic(SQLModel):
     data: list[FacePublic]
     count: int
+
+
+class FaceOrientation(str, Enum):
+    CENTER = "center"
+    LEFT = "left"
+    RIGHT = "right"

@@ -1,3 +1,4 @@
+import base64
 import logging
 from typing import Any
 from uuid import UUID
@@ -17,7 +18,7 @@ from app.crud import (
     user_project_link,
 )
 from app.models.auth_code import AuthCodeCreate
-from app.models.face import FaceCreate
+from app.models.face import FaceCreate, FaceOrientation
 from app.schemas.auth import AuthTypes, SioUserSession
 from app.utils import generate_auth_code
 from app.utils.antispoofing.inference import infer_liveness_from_frames
@@ -134,33 +135,84 @@ class AuthNamespace(socketio.AsyncNamespace):  # type: ignore
         self,
         sid: str,
         db_session: Session,
-        user_session: SioUserSession,
         face_embedding: list[float],
+        face_orientation: FaceOrientation,
     ) -> None:
         """Handle face registration process.
 
         Args:
             sid: Session ID of the client
             db_session: Database session
-            user_session: User session data
             face_embedding: Face embedding vector
         """
-        if not (session_user_id := user_session.user_id):
-            await self.emit_error(sid, "Not authenticated", disconnect=True)
-            return
+        async with self.session(sid) as session:
+            if not (session_user_id := session.user_id):
+                await self.emit_error(
+                    sid, "Not authenticated", disconnect=True
+                )
+                return
 
-        face.create(
-            session=db_session,
-            owner_id=UUID(session_user_id),
-            obj_in=FaceCreate(embedding=face_embedding),
-        )
+            if session.face_data is None:
+                if face_orientation != FaceOrientation.CENTER:
+                    await self.emit(
+                        "set_orientation",
+                        FaceOrientation.CENTER.value,
+                        room=sid,
+                    )
+                    return
 
-        await self.emit(
-            "auth_success",
-            {"user_id": session_user_id},
-            room=sid,
-        )
-        await self.disconnect(sid)
+                session.face_data = FaceCreate(
+                    center_embedding=face_embedding,
+                    left_embedding=None,
+                    right_embedding=None,
+                )
+                await self.emit(
+                    "set_orientation",
+                    FaceOrientation.RIGHT.value,
+                    room=sid,
+                )
+                return
+
+            if session.face_data.right_embedding is None:
+                if face_orientation != FaceOrientation.RIGHT:
+                    await self.emit(
+                        "set_orientation",
+                        FaceOrientation.RIGHT.value,
+                        room=sid,
+                    )
+                    return
+
+                session.face_data.right_embedding = face_embedding
+                await self.emit(
+                    "set_orientation",
+                    FaceOrientation.LEFT.value,
+                    room=sid,
+                )
+                return
+
+            if session.face_data.left_embedding is None:
+                if face_orientation == FaceOrientation.LEFT:
+                    await self.emit(
+                        "set_orientation",
+                        FaceOrientation.LEFT.value,
+                        room=sid,
+                    )
+                    return
+
+                session.face_data.left_embedding = face_embedding
+
+            face.create(
+                session=db_session,
+                owner_id=UUID(session_user_id),
+                obj_in=session.face_data,
+            )
+
+            await self.emit(
+                "auth_success",
+                {"user_id": session_user_id},
+                room=sid,
+            )
+            await self.disconnect(sid)
 
     async def _handle_login(
         self,
@@ -168,6 +220,7 @@ class AuthNamespace(socketio.AsyncNamespace):  # type: ignore
         db_session: Session,
         user_session: SioUserSession,
         face_embedding: list[float],
+        face_orientation: FaceOrientation,
     ) -> None:
         """Handle face-based login process.
 
@@ -185,12 +238,22 @@ class AuthNamespace(socketio.AsyncNamespace):  # type: ignore
             await self.emit_error(sid, "Invalid origin", disconnect=True)
             return
 
-        match = face.face_match(
-            session=db_session,
-            embedding=face_embedding,
-            threshold=settings.FACE_MATCH_THRESHOLD,
-        )
-        if not match:
+        if face_orientation != user_session.random_orientation:
+            await self.emit(
+                "set_orientation",
+                user_session.random_orientation.value,
+                room=sid,
+            )
+            return
+
+        if not (
+            match := face.face_match(
+                session=db_session,
+                embedding=face_embedding,
+                face_orientation=face_orientation,
+                threshold=settings.FACE_MATCH_THRESHOLD,
+            )
+        ):
             await self.emit_error(sid, "Face not recognized")
             return
 
@@ -208,6 +271,7 @@ class AuthNamespace(socketio.AsyncNamespace):  # type: ignore
         db_session: Session,
         user_session: SioUserSession,
         face_embedding: list[float],
+        face_orientation: FaceOrientation,
     ) -> None:
         """Handle OAuth authentication process.
 
@@ -235,10 +299,19 @@ class AuthNamespace(socketio.AsyncNamespace):  # type: ignore
             await self.emit_error(sid, "Invalid oauth_session_id")
             return
 
+        if face_orientation != user_session.random_orientation:
+            await self.emit(
+                "set_orientation",
+                user_session.random_orientation.value,
+                room=sid,
+            )
+            return
+
         if not (
             match := face.face_match(
                 session=db_session,
                 embedding=face_embedding,
+                face_orientation=face_orientation,
                 threshold=settings.FACE_MATCH_THRESHOLD,
             )
         ):
@@ -281,15 +354,13 @@ class AuthNamespace(socketio.AsyncNamespace):  # type: ignore
             room=sid,
         )
 
-    async def on_stream(self, sid: str, data: bytes) -> None:
+    async def on_stream(self, sid: str, data: dict) -> None:
         """Process video stream frames for authentication.
 
         Args:
             sid: Session ID of the client
             data: Raw video frame data
         """
-        await self.emit("set_orientation", "left", room=sid)
-
         user_session = SioUserSession(
             **(await self.get_session(sid)).model_dump()
         )
@@ -301,8 +372,37 @@ class AuthNamespace(socketio.AsyncNamespace):  # type: ignore
             )
             return
 
+        if type(data) is not dict:
+            await self.emit_error(sid, "Invalid data type, must be dict")
+            return
+
+        if not (raw_frame := data.get("frame")):
+            await self.emit_error(sid, "Missing frame data")
+            return
+
+        if type(raw_frame) is str:
+            try:
+                raw_frame = base64.b64decode(raw_frame)
+            except ValueError:
+                await self.emit_error(sid, "Invalid frame data format")
+                return
+
+        if type(raw_frame) is not bytes:
+            await self.emit_error(sid, "Invalid frame data type")
+            return
+
+        if not (frame_orientation := data.get("orientation")):
+            await self.emit_error(sid, "Missing frame orientation")
+            return
+
         try:
-            frame = parse_frame(data)
+            frame_orientation = FaceOrientation(frame_orientation)
+        except ValueError:
+            await self.emit_error(sid, "Invalid frame orientation value")
+            return
+
+        try:
+            frame = parse_frame(raw_frame)
         except ValueError as e:
             await self.emit_error(sid, str(e))
             return
@@ -344,8 +444,8 @@ class AuthNamespace(socketio.AsyncNamespace):  # type: ignore
                 await self._handle_register(
                     sid,
                     db_session,
-                    user_session,
                     largest_face["embedding"],
+                    frame_orientation,
                 )
             case AuthTypes.LOGIN:
                 await self._handle_login(
@@ -353,6 +453,7 @@ class AuthNamespace(socketio.AsyncNamespace):  # type: ignore
                     db_session,
                     user_session,
                     largest_face["embedding"],
+                    frame_orientation,
                 )
             case AuthTypes.OAUTH:
                 await self._handle_oauth(
@@ -360,6 +461,7 @@ class AuthNamespace(socketio.AsyncNamespace):  # type: ignore
                     db_session,
                     user_session,
                     largest_face["embedding"],
+                    frame_orientation,
                 )
 
     async def on_disconnect(self, sid: str) -> None:

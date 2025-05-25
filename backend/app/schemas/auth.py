@@ -1,9 +1,12 @@
 from enum import Enum
+from random import choice
 from uuid import UUID
 
 from PIL import Image
 from pydantic import BaseModel
-from supabase_auth import User, UserAttributes  # type: ignore
+from supabase_auth import User, UserAttributes
+
+from app.models.face import FaceCreate, FaceOrientation
 
 
 # Shared properties
@@ -75,6 +78,8 @@ class SioUserSession(BaseModel):
     code_challenge: str | None = None
     oauth_session_uuid: UUID | None = None
     liveness_frames: list[Image.Image] = []
+    face_data: FaceCreate | None = None
+    random_orientation: FaceOrientation = choice(list(FaceOrientation))
 
     class Config:
         arbitrary_types_allowed = True
