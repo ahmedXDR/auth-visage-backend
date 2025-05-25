@@ -14,6 +14,8 @@ from supabase import (
 from app.core.config import settings
 from app.schemas.auth import UserIn
 
+logger = logging.getLogger("uvicorn")
+
 
 def get_super_client() -> Client:
     client = create_client(
@@ -56,8 +58,12 @@ async def get_current_user(
 ) -> UserIn:
     """get current user from token and validate same time"""
     token = credentials.credentials
-    user_rsp = await super_client.auth.get_user(jwt=token)
+    try:
+        user_rsp = await super_client.auth.get_user(jwt=token)
+    except Exception as e:
+        logger.error(f"Error getting user: {e}")
+        raise HTTPException(status_code=404, detail="User not found")
+
     if not user_rsp:
-        logging.error("User not found")
         raise HTTPException(status_code=404, detail="User not found")
     return UserIn(**user_rsp.user.model_dump(), access_token=token)
