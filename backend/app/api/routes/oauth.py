@@ -1,6 +1,6 @@
 from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Cookie, HTTPException, Request, Response
 
 from app.api.deps import SessionDep
 from app.core.db import generate_oauth_token, refresh_oauth_token
@@ -12,7 +12,7 @@ from app.crud import (
     trusted_origin,
 )
 from app.models.oauth_session import OAuthSession, OAuthSessionCreate
-from app.schemas import OAuthToken, OAuthTokenRequest
+from app.schemas import OAuthTokenRequest
 from app.utils import sha256_base64url_encode
 
 router = APIRouter(prefix="/oauth", tags=["oauth"])
@@ -49,12 +49,12 @@ async def create_session(
 
 @router.post(
     "/token",
-    response_model=OAuthToken,
 )
 async def get_token(
+    response: Response,
     token_request: OAuthTokenRequest,
     session: SessionDep,
-) -> OAuthToken:
+) -> dict[str, str]:
     code = token_request.code
     code_obj = auth_code.get_by_code(session, code=code)
 
@@ -76,21 +76,44 @@ async def get_token(
     # delete the code
     auth_code.remove(session, id=code_obj.id)
 
-    return generate_oauth_token(
+    oauth_token = generate_oauth_token(
         session,
         code_obj.owner_id,
         code_obj.project_id,
     )
 
+    # Set tokens as HTTP-only cookies
+    response.set_cookie(
+        key="access_token",
+        value=oauth_token.access_token,
+        max_age=oauth_token.expires_in,
+        httponly=True,
+        secure=True,
+        samesite="lax",
+    )
+    response.set_cookie(
+        key="refresh_token",
+        value=oauth_token.refresh_token,
+        max_age=30 * 24 * 60 * 60,  # 30 days
+        httponly=True,
+        secure=True,
+        samesite="lax",
+    )
+
+    return {"message": "Tokens set successfully"}
+
 
 @router.post(
     "/refresh-token",
-    response_model=OAuthToken,
 )
 async def refresh_token(
-    refresh_token: str,
+    response: Response,
     session: SessionDep,
-) -> OAuthToken:
+    refresh_token: str = Cookie(None),
+) -> dict[str, str]:
+    if refresh_token is None:
+        raise HTTPException(status_code=400, detail="No refresh token found")
+
     refresh_token_obj = oauth_refresh_token.get_by_token(
         session, token=refresh_token
     )
@@ -103,8 +126,28 @@ async def refresh_token(
     if oauth_session_obj is None:
         raise HTTPException(status_code=400, detail="Session expired")
 
-    return refresh_oauth_token(
+    oauth_token = refresh_oauth_token(
         session,
         refresh_token_obj,
         oauth_session_obj,
     )
+
+    # Set tokens as HTTP-only cookies
+    response.set_cookie(
+        key="access_token",
+        value=oauth_token.access_token,
+        max_age=oauth_token.expires_in,
+        httponly=True,
+        secure=True,
+        samesite="lax",
+    )
+    response.set_cookie(
+        key="refresh_token",
+        value=oauth_token.refresh_token,
+        max_age=30 * 24 * 60 * 60,  # 30 days
+        httponly=True,
+        secure=True,
+        samesite="lax",
+    )
+
+    return {"message": "Tokens refreshed successfully"}
