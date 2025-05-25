@@ -14,6 +14,7 @@ from app.api.routes.ws_no_prefix import AuthNamespace
 from app.core.config import settings
 from app.core.socket_io import sio
 from app.utils import custom_generate_unique_id
+from app.utils.cache_models import cache_models
 
 logger = logging.getLogger("uvicorn")
 
@@ -23,6 +24,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """life span events"""
     try:
         logger.info("lifespan start")
+        cache_models()
         yield
     finally:
         logger.info("lifespan exit")
