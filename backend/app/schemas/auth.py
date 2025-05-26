@@ -3,7 +3,7 @@ from random import choice
 from uuid import UUID
 
 from PIL import Image
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from supabase_auth import User, UserAttributes
 
 from app.models.face import FaceCreate, FaceOrientation
@@ -71,6 +71,8 @@ class AuthTypes(str, Enum):
 
 
 class SioUserSession(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
     user_id: str | None = None
     origin: str | None = None
     pending_oauth: bool = False
@@ -80,6 +82,3 @@ class SioUserSession(BaseModel):
     liveness_frames: list[Image.Image] = []
     face_data: FaceCreate | None = None
     random_orientation: FaceOrientation = choice(list(FaceOrientation))
-
-    class Config:
-        arbitrary_types_allowed = True
