@@ -21,7 +21,6 @@ from app.models.auth_code import AuthCodeCreate
 from app.models.face import FaceCreate, FaceOrientation
 from app.schemas.auth import AuthTypes, SioUserSession
 from app.utils import generate_auth_code
-from app.utils.antispoofing.inference import infer_liveness_from_frames
 from app.utils.detection import extract_largest_face, parse_frame
 from app.utils.errors import FaceSpoofingDetected
 
@@ -334,7 +333,7 @@ class AuthNamespace(socketio.AsyncNamespace):  # type: ignore
                     "project": project.get(
                         db_session,
                         id=oauth_session_obj.project_id,
-                    ),
+                    ).model_dump_json(),
                 },
             )
             return
@@ -410,22 +409,22 @@ class AuthNamespace(socketio.AsyncNamespace):  # type: ignore
             await self.emit_error(sid, str(e))
             return
 
-        async with self.session(sid) as session:
-            if len(session.liveness_frames) < 4:
-                session.liveness_frames.append(frame)
-                return
-            elif len(session.liveness_frames) == 4:
-                session.liveness_frames.append(frame)
-            else:
-                session.liveness_frames = [frame]
-                return
+        # async with self.session(sid) as session:
+        #     if len(session.liveness_frames) < 4:
+        #         session.liveness_frames.append(frame)
+        #         return
+        #     elif len(session.liveness_frames) == 4:
+        #         session.liveness_frames.append(frame)
+        #     else:
+        #         session.liveness_frames = [frame]
+        #         return
 
-        liveness_score = infer_liveness_from_frames(
-            [user_session.liveness_frames]
-        )[0]
-        if liveness_score < settings.LIVENESS_THRESHOLD:
-            await self.emit_error(sid, "Liveness check failed")
-            return
+        # liveness_score = infer_liveness_from_frames(
+        #     [user_session.liveness_frames]
+        # )[0]
+        # if liveness_score < settings.LIVENESS_THRESHOLD:
+        #     await self.emit_error(sid, "Liveness check failed")
+        #     return
 
         try:
             largest_face = extract_largest_face(
