@@ -82,15 +82,6 @@ async def get_token(
         code_obj.project_id,
     )
 
-    # Set tokens as HTTP-only cookies
-    response.set_cookie(
-        key="access_token",
-        value=oauth_token.access_token,
-        max_age=oauth_token.expires_in,
-        httponly=True,
-        secure=True,
-        samesite="lax",
-    )
     response.set_cookie(
         key="refresh_token",
         value=oauth_token.refresh_token,
@@ -100,7 +91,7 @@ async def get_token(
         samesite="lax",
     )
 
-    return {"message": "Tokens set successfully"}
+    return {"access_token": oauth_token.access_token}
 
 
 @router.post(
@@ -133,15 +124,6 @@ async def refresh_token(
         oauth_session_obj,
     )
 
-    # Set tokens as HTTP-only cookies
-    response.set_cookie(
-        key="access_token",
-        value=oauth_token.access_token,
-        max_age=oauth_token.expires_in,
-        httponly=True,
-        secure=True,
-        samesite="lax",
-    )
     response.set_cookie(
         key="refresh_token",
         value=oauth_token.refresh_token,
@@ -151,4 +133,4 @@ async def refresh_token(
         samesite="lax",
     )
 
-    return {"message": "Tokens refreshed successfully"}
+    return {"access_token": oauth_token.access_token}
