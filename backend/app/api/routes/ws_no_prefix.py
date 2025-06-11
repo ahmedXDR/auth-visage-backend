@@ -329,7 +329,7 @@ class AuthNamespace(socketio.AsyncNamespace):  # type: ignore
             )
         ):
             async with self.session(sid) as session:
-                session.user_id = match.owner_id
+                session.user_id = str(match.owner_id)
 
             await self.emit(
                 "capture_consent",
@@ -470,7 +470,7 @@ class AuthNamespace(socketio.AsyncNamespace):  # type: ignore
                     frame_orientation,
                 )
 
-    async def on_consent_capture(self, sid: str) -> None:
+    async def on_consent_captured(self, sid: str) -> None:
         """Handle user consent for OAuth project capture.
 
         Args:
@@ -521,8 +521,8 @@ class AuthNamespace(socketio.AsyncNamespace):  # type: ignore
 
         auth_code.create(
             session=db_session,
-            owner_id=user_id,
             obj_in=auth_obj,
+            owner_id=UUID(user_id),
         )
 
         await self.emit(
