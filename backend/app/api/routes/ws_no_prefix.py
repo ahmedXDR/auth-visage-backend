@@ -19,6 +19,7 @@ from app.crud import (
 )
 from app.models.auth_code import AuthCodeCreate
 from app.models.face import FaceCreate, FaceOrientation
+from app.models.user_project_link import UserProjectLinkCreate
 from app.schemas.auth import AuthTypes, SioUserSession
 from app.utils import generate_auth_code
 from app.utils.detection import extract_largest_face, parse_frame
@@ -327,6 +328,9 @@ class AuthNamespace(socketio.AsyncNamespace):  # type: ignore
                 project_id=oauth_session_obj.project_id,
             )
         ):
+            async with self.session(sid) as session:
+                session.user_id = match.owner_id
+
             await self.emit(
                 "capture_consent",
                 {
@@ -465,6 +469,67 @@ class AuthNamespace(socketio.AsyncNamespace):  # type: ignore
                     largest_face["embedding"],
                     frame_orientation,
                 )
+
+    async def on_consent_capture(self, sid: str) -> None:
+        """Handle user consent for OAuth project capture.
+
+        Args:
+            sid: Session ID of the client
+            data: Consent data containing project ID and consent status
+        """
+        db_session = next(get_db())
+        user_session = SioUserSession(
+            **(await self.get_session(sid)).model_dump()
+        )
+
+        if not (user_id := user_session.user_id):
+            await self.emit_error(sid, "Unknown user")
+            return
+
+        if not (code_challenge := user_session.code_challenge):
+            await self.emit_error(sid, "Missing code_challenge")
+            return
+
+        if not (oauth_session_id := user_session.oauth_session_uuid):
+            await self.emit_error(sid, "Missing oauth_session_id")
+            return
+
+        if not (
+            oauth_session_obj := oauth_session.get(
+                session=db_session,
+                id=oauth_session_id,
+            )
+        ):
+            await self.emit_error(sid, "Invalid oauth_session_id")
+            return
+
+        project_id = oauth_session_obj.project_id
+
+        user_project_link.create(
+            session=db_session,
+            owner_id=UUID(user_id),
+            obj_in=UserProjectLinkCreate(
+                project_id=project_id,
+            ),
+        )
+
+        auth_obj = AuthCodeCreate(
+            code=generate_auth_code(),
+            code_challenge=code_challenge,
+            project_id=oauth_session_obj.project_id,
+        )
+
+        auth_code.create(
+            session=db_session,
+            owner_id=user_id,
+            obj_in=auth_obj,
+        )
+
+        await self.emit(
+            "auth_success",
+            {"auth_code": auth_obj.code},
+            room=sid,
+        )
 
     async def on_disconnect(self, sid: str) -> None:
         """Handle client disconnection events.
