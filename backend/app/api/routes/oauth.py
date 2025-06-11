@@ -112,7 +112,10 @@ async def refresh_token(
     refresh_token: str = Cookie(None),
 ) -> dict[str, str]:
     if refresh_token is None:
-        raise HTTPException(status_code=400, detail="No refresh token found")
+        raise HTTPException(
+            status_code=400,
+            detail="Missing refresh_token cookie",
+        )
 
     refresh_token_obj = oauth_refresh_token.get_by_token(
         session, token=refresh_token
@@ -123,8 +126,6 @@ async def refresh_token(
     oauth_session_obj = oauth_session.get(
         session, id=refresh_token_obj.oauth_session_id
     )
-    if oauth_session_obj is None:
-        raise HTTPException(status_code=400, detail="Session expired")
 
     oauth_token = refresh_oauth_token(
         session,

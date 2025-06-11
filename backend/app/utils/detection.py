@@ -112,7 +112,14 @@ def extract_largest_face(
         and largest_face_obj["antispoof_score"] > settings.ANTI_SPOOF_THRESHOLD
     ):
         raise FaceSpoofingDetected("Face spoofing detected")
+    embedding = DeepFace.represent(
+        largest_face_obj["face"],
+        model_name=MODEL_NAME,
+        detector_backend="skip",
+        max_faces=1,
+    )[0]["embedding"]
 
+    largest_face_obj["embedding"] = embedding
     if embed:
         try:
             embedding = DeepFace.represent(

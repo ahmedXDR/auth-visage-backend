@@ -64,6 +64,4 @@ async def get_current_user(
         logger.error(f"Error getting user: {e}")
         raise HTTPException(status_code=404, detail="User not found")
 
-    if not user_rsp:
-        raise HTTPException(status_code=404, detail="User not found")
     return UserIn(**user_rsp.user.model_dump(), access_token=token)

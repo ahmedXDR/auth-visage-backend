@@ -2,6 +2,7 @@ from uuid import UUID
 
 from sqlmodel import Session, text
 
+from app.core.config import settings
 from app.crud.base import CRUDBase
 from app.models.face import (
     Face,
@@ -31,13 +32,13 @@ class CRUDFace(CRUDBase[Face, FaceCreate, FaceUpdate]):
         *,
         embedding: list[float],
         face_orientation: FaceOrientation = FaceOrientation.CENTER,
-        threshold: float,
+        threshold: float = settings.FACE_MATCH_THRESHOLD,
     ) -> FaceMatch | None:
         statement = text(
             f"""
 select *
 from (
-    select f.owner_id, f.{face_orientation.value}_embedding <-> '{str(embedding)}' as distance
+    select f.owner_id, f.{face_orientation.value}_embedding <-> '[{",".join(map(str, embedding))}]' as distance
     from face f
 ) a
 where distance < {threshold}

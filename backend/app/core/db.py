@@ -60,8 +60,10 @@ def init_db(session: Session) -> None:
                 "password": settings.FIRST_SUPERUSER_PASSWORD,
             }
         )
+        assert response.user is not None
         assert response.user.email == settings.FIRST_SUPERUSER
         assert response.user.id is not None
+        assert response.session is not None
         assert response.session.access_token is not None
 
 
@@ -90,6 +92,7 @@ def generate_oauth_token(
     )
 
     oauth_token = OAuthToken(
+        oauth_session_id=oauth_session_obj.id,
         access_token=create_jwt_token(user_data),
         refresh_token=oauth_refresh_token_obj.token,
         expires_in=settings.JWT_lifespan,
@@ -118,6 +121,7 @@ def refresh_oauth_token(
         session,
         id=oauth_session_obj.id,
         obj_in=OAuthSessionUpdate(
+            project_id=oauth_session_obj.project_id,
             refreshed_at=new_oauth_refresh_token_obj.created_at,
         ),
     )
@@ -126,6 +130,7 @@ def refresh_oauth_token(
     oauth_refresh_token.remove(session, id=refresh_token.id)
 
     oauth_token = OAuthToken(
+        oauth_session_id=oauth_session_obj.id,
         access_token=create_jwt_token(user_data),
         refresh_token=new_oauth_refresh_token_obj.token,
         expires_in=settings.JWT_lifespan,

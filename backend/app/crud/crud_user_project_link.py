@@ -30,11 +30,17 @@ class CRUDUserProjectLink:
         self,
         session: Session,
         *,
+        owner_id: UUID,
         skip: int = 0,
         limit: int = 100,
     ) -> Sequence[UserProjectLink]:
-        """Get multiple records with pagination"""
-        statement = select(UserProjectLink).offset(skip).limit(limit)
+        """Get multiple records for an owner with pagination"""
+        statement = (
+            select(UserProjectLink)
+            .where(UserProjectLink.owner_id == owner_id)
+            .offset(skip)
+            .limit(limit)
+        )
         result = session.exec(statement)
         return result.all()
 
