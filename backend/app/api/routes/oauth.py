@@ -1,6 +1,6 @@
 from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter, Cookie, HTTPException, Request, Response
+from fastapi import APIRouter, HTTPException, Request
 
 from app.api.deps import SessionDep
 from app.core.db import generate_oauth_token, refresh_oauth_token
@@ -13,6 +13,7 @@ from app.crud import (
 )
 from app.models.oauth_session import OAuthSession, OAuthSessionCreate
 from app.schemas import OAuthTokenRequest
+from app.schemas.auth import OAuthToken
 from app.utils import sha256_base64url_encode
 
 router = APIRouter(prefix="/oauth", tags=["oauth"])
@@ -49,12 +50,12 @@ async def create_session(
 
 @router.post(
     "/token",
+    response_model=OAuthToken,
 )
 async def get_token(
-    response: Response,
     token_request: OAuthTokenRequest,
     session: SessionDep,
-) -> dict[str, str]:
+) -> OAuthToken:
     code = token_request.code
     code_obj = auth_code.get_by_code(session, code=code)
 
@@ -82,26 +83,17 @@ async def get_token(
         code_obj.project_id,
     )
 
-    response.set_cookie(
-        key="refresh_token",
-        value=oauth_token.refresh_token,
-        max_age=30 * 24 * 60 * 60,  # 30 days
-        httponly=True,
-        secure=True,
-        samesite="lax",
-    )
-
-    return {"access_token": oauth_token.access_token}
+    return oauth_token
 
 
 @router.post(
     "/refresh-token",
+    response_model=OAuthToken,
 )
 async def refresh_token(
-    response: Response,
     session: SessionDep,
-    refresh_token: str = Cookie(None),
-) -> dict[str, str]:
+    refresh_token: str,
+) -> OAuthToken:
     if refresh_token is None:
         raise HTTPException(
             status_code=400,
@@ -124,13 +116,4 @@ async def refresh_token(
         oauth_session_obj,
     )
 
-    response.set_cookie(
-        key="refresh_token",
-        value=oauth_token.refresh_token,
-        max_age=30 * 24 * 60 * 60,  # 30 days
-        httponly=True,
-        secure=True,
-        samesite="lax",
-    )
-
-    return {"access_token": oauth_token.access_token}
+    return oauth_token
