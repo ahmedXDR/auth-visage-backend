@@ -22,6 +22,10 @@ class OAuthTokenRequest(BaseModel):
     code_verifier: str
 
 
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str
+
+
 class Token(BaseModel):
     access_token: str | None = None
     refresh_token: str | None = None

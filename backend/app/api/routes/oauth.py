@@ -13,7 +13,7 @@ from app.crud import (
 )
 from app.models.oauth_session import OAuthSession, OAuthSessionCreate
 from app.schemas import OAuthTokenRequest
-from app.schemas.auth import OAuthToken
+from app.schemas.auth import OAuthToken, RefreshTokenRequest
 from app.utils import sha256_base64url_encode
 
 router = APIRouter(prefix="/oauth", tags=["oauth"])
@@ -92,11 +92,11 @@ async def get_token(
 )
 async def refresh_token(
     session: SessionDep,
-    refresh_token: str,
+    refresh_request: RefreshTokenRequest,
 ) -> OAuthToken:
     refresh_token_obj = oauth_refresh_token.get_by_token(
         session,
-        token=refresh_token,
+        token=refresh_request.refresh_token,
     )
     if refresh_token_obj is None:
         raise HTTPException(status_code=400, detail="Invalid refresh token")
