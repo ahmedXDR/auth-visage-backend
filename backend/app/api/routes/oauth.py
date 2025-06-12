@@ -94,14 +94,9 @@ async def refresh_token(
     session: SessionDep,
     refresh_token: str,
 ) -> OAuthToken:
-    if refresh_token is None:
-        raise HTTPException(
-            status_code=400,
-            detail="Missing refresh_token cookie",
-        )
-
     refresh_token_obj = oauth_refresh_token.get_by_token(
-        session, token=refresh_token
+        session,
+        token=refresh_token,
     )
     if refresh_token_obj is None:
         raise HTTPException(status_code=400, detail="Invalid refresh token")
@@ -117,3 +112,21 @@ async def refresh_token(
     )
 
     return oauth_token
+
+
+@router.post(
+    "/logout",
+)
+async def logout(
+    session: SessionDep,
+    oauth_token: OAuthToken,
+) -> None:
+    session_id = oauth_token.oauth_session_id
+    oauth_session.remove(session, id=session_id)
+
+    refresh_token = oauth_refresh_token.get_by_token(
+        session,
+        token=oauth_token.refresh_token,
+    )
+    if refresh_token:
+        oauth_refresh_token.remove(session, id=refresh_token.id)
