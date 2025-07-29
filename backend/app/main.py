@@ -2,7 +2,7 @@ import logging
 from collections.abc import AsyncGenerator
 from typing import Any
 
-import socketio
+import socketio  # type: ignore
 import uvicorn
 from fastapi import FastAPI
 from fastapi.concurrency import asynccontextmanager
@@ -10,10 +10,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from uvicorn.config import LOGGING_CONFIG
 
 from app.api.main import api_router
-from app.api.routes.ws_no_prefix import NoPrefixNamespace
+from app.api.routes.ws_no_prefix import AuthNamespace
 from app.core.config import settings
 from app.core.socket_io import sio
 from app.utils import custom_generate_unique_id
+from app.utils.cache_models import cache_models
 
 logger = logging.getLogger("uvicorn")
 
@@ -23,6 +24,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """life span events"""
     try:
         logger.info("lifespan start")
+        cache_models()
         yield
     finally:
         logger.info("lifespan exit")
@@ -41,14 +43,14 @@ app = FastAPI(
 if settings.all_cors_origins:
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.all_cors_origins,
+        allow_origins=["*"],
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
     )
 
 # SocketIO
-sio.register_namespace(NoPrefixNamespace("/"))
+sio.register_namespace(AuthNamespace("/"))
 sio_asgi_app = socketio.ASGIApp(socketio_server=sio, other_asgi_app=app)
 
 app.add_route("/socket.io/", route=sio_asgi_app, methods=["GET", "POST"])

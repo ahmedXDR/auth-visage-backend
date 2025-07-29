@@ -49,9 +49,12 @@ COPY . .
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync
 
+# Pre-download DeepFace models
+RUN python -m app.utils.cache_models
+
 # Set the default command
 # Ref: https://fastapi.tiangolo.com/deployment/docker/
-CMD ["fastapi", "run", "app/main.py", "--port", "9000"]
+CMD ["bash", "-c", "scripts/pre-start.sh && fastapi run app/main.py --port 9000"]
 
 # If running behind a proxy like Nginx or Traefik add --proxy-headers
 # CMD ["fastapi", "run", "app/main.py", "--port", "9000", "--proxy-headers"]

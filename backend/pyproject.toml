@@ -1,7 +1,7 @@
 [project]
 name = "auth-visage-backend"
 version = "0.1.0"
-requires-python = ">3.11,<4.0"
+requires-python = ">3.11,<=3.13"
 readme = "README.md"
 dependencies = [
     "fastapi[standard] (>=0.115.8,<0.116.0)",
@@ -11,12 +11,22 @@ dependencies = [
     "pydantic-settings (>=2.8.0,<3.0.0)",
     "sqlmodel (>=0.0.22,<0.0.23)",
     "supabase (>=2.13.0,<3.0.0)",
-    "opencv-python (>=4.11.0.86,<5.0.0.0)",
     "deepface (>=0.0.93,<0.0.94)",
     "psycopg (>=3.2.5,<4.0.0)",
-    "torch>=2.6.0",
     "numpy>=2.0.2",
+    "alembic>=1.14.1",
+    "tenacity>=9.0.0",
+    "pgvector>=0.3.6",
+    "pyjwt>=2.10.1",
     "tf-keras>=2.18.0",
+    "aiohttp==3.11.16",
+    "tensorflow[and-cuda]>=2.18.0",
+    "supabase-auth>=2.12.0",
+    "ipykernel>=6.29.5",
+    "torch==2.7.0",
+    "opencv-contrib-python>=4.11.0.86",
+    "onnxruntime>=1.22.0",
+    "torchvision==0.22.0",
 ]
 
 [build-system]
@@ -24,17 +34,61 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [dependency-groups]
-dev = ["isort>=6.0.0,<7"]
+dev = [
+    "coverage>=7.6.12",
+    "isort>=6.0.1",
+    "mypy>=1.15.0",
+    "pre-commit>=4.2.0",
+    "pytest>=8.3.5",
+    "ruff>=0.9.9",
+]
 
 [tool.uv]
 package = false
 
 
+## Test
+[tool.mypy]
+strict = true
+exclude = ["venv", ".venv", "alembic"]
+# disable_error_code = ["import-untyped"]
+
+
+[tool.pytest.ini_options]
+# Set additional command line options for pytest
+# Ref: https://docs.pytest.org/en/stable/reference/reference.html#command-line-flags
+addopts = "-rXs --strict-config --strict-markers --tb=short"
+xfail_strict = true         # Treat tests that are marked as xfail but pass as test failures
+# filterwarnings = ["error"]  # Treat all warnings as errors
+pythonpath = "app"
+
+[tool.coverage.run]
+branch = true
+
+[tool.coverage.report]
+skip_covered = true
+show_missing = true
+precision = 2
+exclude_lines = [
+    'def __repr__',
+    'pragma= no cover',
+    'raise NotImplementedError',
+    'if TYPE_CHECKING=',
+    'if typing.TYPE_CHECKING=',
+    '@overload',
+    '@typing.overload',
+    '\(Protocol\)=$',
+    'typing.assert_never',
+    'assert_never',
+    'if __name__ == "__main__":',
+]
+
+
 ## Linter and formatter
 [tool.ruff]
 # cover and extend the default config in https=//docs.astral.sh/ruff/configuration/
-extend-exclude = ["alembic"]
-target-version = "py310"
+target-version = "py311"
+line-length = 79
 
 [tool.ruff.lint]
 select = [
@@ -65,11 +119,29 @@ ignore = [
     "W293",   # Blank line contains whitespace
 ]
 
-isort = { combine-as-imports = true, split-on-trailing-comma = false }
+
 
 # Avoid trying to fix flake8-bugbear (`B`) violations.
 unfixable = ["B"]
 
+[tool.isort]
+py_version = 39
+split_on_trailing_comma = true
+include_trailing_comma = true
+line_length = 79
+
+
 [tool.ruff.format]
 docstring-code-format = true
-skip-magic-trailing-comma = true
+skip-magic-trailing-comma = false
+
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = [
+    { index = "pytorch-cpu" },
+]

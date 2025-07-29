@@ -1,44 +1,49 @@
 import io
-from typing import Any, List, Union
+import logging
+from enum import Enum
+from typing import Any
 
-import numpy as np
-from PIL import Image, ImageDraw
-from deepface import DeepFace
+from deepface import DeepFace  # type: ignore
+from numpy import array
+from PIL import Image
 
-models = [
-    "VGG-Face",
-    "Facenet",
-    "Facenet512",
-    "OpenFace",
-    "DeepFace",
-    "DeepID",
-    "ArcFace",
-    "Dlib",
-    "SFace",
-    "GhostFaceNet",
-]
-
-backends = [
-    "opencv",
-    "ssd",
-    "dlib",
-    "mtcnn",
-    "retinaface",
-    "mediapipe",
-    "yolov8",
-    "yunet",
-    "fastmtcnn",
-]
-
-metrics = ["cosine", "euclidean", "euclidean_l2"]
-
-MODEL_NAME = models[9]
-DETECTOR_BACKEND = backends[0]
-DISTANCE_METRIC = metrics[2]
+from app.core.config import settings
+from app.utils.errors import FaceSpoofingDetected
 
 
-def parse_frame(data) -> Image.Image:
+class Models(str, Enum):
+    VGG_FACE = "VGG-Face"
+    FACENET = "Facenet"
+    FACENET512 = "Facenet512"
+    OPENFACE = "OpenFace"
+    DEEPFACE = "DeepFace"
+    DEEPID = "DeepID"
+    ARCFACE = "ArcFace"
+    DLIB = "Dlib"
+    SFACE = "SFace"
+    GHOSTFACENET = "GhostFaceNet"
 
+
+class Backends(str, Enum):
+    OPENCV = "opencv"
+    SSD = "ssd"
+    DLIB = "dlib"
+    MTCNN = "mtcnn"
+    RETINA_FACE = "retinaface"
+    MEDIAPIPE = "mediapipe"
+    YOLOV8 = "yolov8"
+    YUNET = "yunet"
+    FASTMTCNN = "fastmtcnn"
+
+
+logger = logging.getLogger("uvicorn")
+
+
+MODEL_NAME = Models.FACENET
+DETECTOR_BACKEND = Backends.RETINA_FACE
+
+
+def parse_frame(data: bytes) -> Image.Image:
     try:
         image_stream = io.BytesIO(data)
         image_stream.seek(0)
@@ -47,129 +52,86 @@ def parse_frame(data) -> Image.Image:
         raise ValueError("Invalid image data")
 
 
-def get_largest_face_location(image: Image.Image):
-    """
-    Load an image file and return the location of the largest face in the
-    image.
-
-    Args:
-        image: image file name or file object to load.
-
-    Returns:
-        result (Dict[str, Any]): The detected face's regions as a dictionary
-        containing:
-        - keys 'x', 'y', 'w', 'h' with int values
-        - keys 'left_eye', 'right_eye' with a tuple of 2 ints as values.
-        left and right eyes
-            are eyes on the left and right respectively with respect to
-            the person itself
-            instead of observer.
-    """
-
-    face_objs = DeepFace.extract_faces(
-        np.array(image),
-        anti_spoofing=True,
-    )
-
-    largest_face = max(
-        face_objs,
-        key=lambda face: face["facial_area"]["w"] * face["facial_area"]["h"],
-    )
-    largest_facial_area: dict[str, Any] = largest_face["facial_area"]
-
-    draw = ImageDraw.Draw(image)
-    draw.rectangle(
-        [
-            largest_facial_area["x"],
-            largest_facial_area["y"],
-            largest_facial_area["x"] + largest_facial_area["w"],
-            largest_facial_area["y"] + largest_facial_area["h"],
-        ],
-        outline="red",
-    )
-
-    return largest_facial_area
-
-
-def embed_largest_face(
+def extract_largest_face(
     image: Image.Image,
-) -> Union[np.ndarray, None]:
+    anti_spoofing=False,
+    embed=False,
+) -> dict[str, Any] | None:
     """
-    Load an image file and return the facial embedding for the largest face in
-    the image using DeepFace.
+    Extract the largest face from a given image
 
     Args:
-        image_file: image file name or file object to load.
-    Returns:
-        The facial embedding for the largest face in the image or None.
-    """
+        image (Image.Image): Image object.
+        anti_spoofing (boolean): Flag to enable anti spoofing (default is False).
+        embed (boolean): Flag to embed the extracted face (default is False).
 
+    Returns:
+        results (Dict[str, Any]): A dictionary which contains:
+
+        - "face" (np.ndarray): The detected face as a NumPy array.
+
+        - "facial_area" (Dict[str, Any]): The detected face's regions as a dictionary containing:
+            - keys 'x', 'y', 'w', 'h' with int values
+            - keys 'left_eye', 'right_eye' with a tuple of 2 ints as values. left and right eyes
+                are eyes on the left and right respectively with respect to the person itself
+                instead of observer.
+
+        - "confidence" (float): The confidence score associated with the detected face.
+
+        - "is_real" (boolean): antispoofing analyze result. this key is just available in the
+            result only if anti_spoofing is set to True in input arguments.
+
+        - "antispoof_score" (float): score of antispoofing analyze result. this key is
+            just available in the result only if anti_spoofing is set to True in input arguments.
+
+        - "embedding" (List[float]): Multidimensional vector representing facial features.
+            The number of dimensions varies based on the reference model (e.g., FaceNet
+            returns 128 dimensions, VGG-Face returns 4096 dimensions).
+    """
     try:
-        embedding_objs = DeepFace.represent(
-            np.array(image),
+        face_objs = DeepFace.extract_faces(
+            array(image),
             detector_backend=DETECTOR_BACKEND,
-            model_name=MODEL_NAME,
+            align=True,
+            anti_spoofing=anti_spoofing,
         )
-
-        largest_face = max(
-            embedding_objs,
-            key=lambda face: (
-                face["facial_area"]["w"] * face["facial_area"]["h"]
-            ),
-        )
-        largest_face_embedding = np.array(largest_face["embedding"])
-
-        return largest_face_embedding
-    except ValueError:
+    except ValueError as e:
+        if "face could not be detected" not in str(e).lower():
+            logger.error(f"Error extracting face: {e}")
         return None
 
+    largest_face_obj = max(
+        face_objs,
+        key=lambda face_obj: face_obj["facial_area"]["w"]
+        * face_obj["facial_area"]["h"],
+    )
 
-def find_best_match(
-    image: Image.Image,
-    embeddings: List[np.ndarray],
-    similarity_threshold=None,
-):
-    """
-    Find the best match for the largest face in an image using DeepFace.
+    if (
+        anti_spoofing
+        and not largest_face_obj["is_real"]
+        and largest_face_obj["antispoof_score"] > settings.ANTI_SPOOF_THRESHOLD
+    ):
+        raise FaceSpoofingDetected("Face spoofing detected")
+    embedding = DeepFace.represent(
+        largest_face_obj["face"],
+        model_name=MODEL_NAME,
+        detector_backend="skip",
+        max_faces=1,
+    )[0]["embedding"]
 
-    :param image_file: image file name or file object to load.
-    :param embeddings: List of embeddings to compare against.
-    :param similarity_threshold: The minimum similarity threshold to consider
-    a match.
-    :return: The index of the best match in the embeddings list or None if no
-    match.
-    """
-    if not embeddings:
-        return None
+    largest_face_obj["embedding"] = embedding
+    if embed:
+        try:
+            embedding = DeepFace.represent(
+                largest_face_obj["face"],
+                model_name=MODEL_NAME,
+                detector_backend="skip",
+                max_faces=1,
+            )[0]["embedding"]
 
-    if similarity_threshold is None:
-        similarity_threshold = DeepFace.verification.find_threshold(
-            MODEL_NAME,
-            DISTANCE_METRIC,
-        )
+            largest_face_obj["embedding"] = embedding
+        except ValueError as e:
+            logger.error(f"Error embedding face: {e}")
+            return None
 
-    largest_face_embedding = embed_largest_face(image)
-
-    if largest_face_embedding is None:
-        return None
-
-    # Initialize variables to store the best match information
-    best_match_index = None
-    best_match_distance = float("inf")
-
-    # Iterate over all embeddings to find the best match
-    for i, candidate_embedding in enumerate(embeddings):
-        # Calculate the Euclidean L2 distance
-        distance = DeepFace.verification.find_distance(
-            largest_face_embedding,
-            candidate_embedding,
-            DISTANCE_METRIC,
-        )
-
-        # Update the best match if this distance is smaller than the current
-        # best and less than the threshold.
-        if distance < best_match_distance and distance < similarity_threshold:
-            best_match_distance = distance
-            best_match_index = i
-
-    return best_match_index
+    return largest_face_obj

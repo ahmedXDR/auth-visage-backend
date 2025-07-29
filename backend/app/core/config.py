@@ -2,7 +2,7 @@ import secrets
 import warnings
 from typing import Annotated, Any, Literal, Self
 
-# from dotenv import load_dotenv
+from dotenv import load_dotenv
 from pydantic import (
     AnyUrl,
     BeforeValidator,
@@ -13,7 +13,7 @@ from pydantic import (
 from pydantic_core import MultiHostUrl
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# load_dotenv()
+load_dotenv("../.env", override=True)
 
 
 def parse_cors(v: Any) -> list[str] | str:
@@ -35,10 +35,12 @@ class Settings(BaseSettings):
         extra="ignore",
     )
     API_V1_STR: str = "/api/v1"
-    SECRET_KEY: str = secrets.token_urlsafe(32)
+    JWT_SECRET: str = secrets.token_urlsafe(32)
+    JWT_ALGORITHM: str = "HS256"
+    JWT_lifespan: int = 3600  # In seconds
     ENVIRONMENT: Literal["local", "staging", "production"] = "local"
 
-    # FRONTEND_HOST: str = "http://localhost:5173"
+    FRONTEND_HOST: str = "http://localhost:3000"
     BACKEND_CORS_ORIGINS: Annotated[
         list[AnyUrl] | str, BeforeValidator(parse_cors)
     ] = []
@@ -48,8 +50,17 @@ class Settings(BaseSettings):
     def all_cors_origins(self) -> list[str]:
         return [
             str(origin).rstrip("/") for origin in self.BACKEND_CORS_ORIGINS
-        ] + [
-            # self.FRONTEND_HOST
+        ] + [self.FRONTEND_HOST]
+
+    TRUSTED_LOGIN_ORIGINS: Annotated[
+        list[str] | str, BeforeValidator(parse_cors)
+    ] = []
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def all_trusted_login_origins(self) -> list[str]:
+        return [
+            str(origin).rstrip("/") for origin in self.TRUSTED_LOGIN_ORIGINS
         ]
 
     PROJECT_NAME: str
@@ -58,6 +69,16 @@ class Settings(BaseSettings):
     SUPABASE_URL: str
     # NOTE: super user key is service_role key instead of the anon key
     SUPABASE_KEY: str
+    SUPABASE_JWT_SECRET: str
+
+    FACE_MATCH_THRESHOLD: float = 10  # distance
+    ANTI_SPOOF_THRESHOLD: float = 0.90
+
+    # liveness detection
+    LIVENESS_MODEL_PATH: str = (
+        "./app/utils/antispoofing/model/liveness_model.onnx"
+    )
+    LIVENESS_THRESHOLD: float = 0.5
 
     POSTGRES_SERVER: str
     POSTGRES_PORT: int = 5432
@@ -93,7 +114,7 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _enforce_non_default_secrets(self) -> Self:
-        self._check_default_secret("SECRET_KEY", self.SECRET_KEY)
+        self._check_default_secret("JWT_SECRET", self.JWT_SECRET)
         self._check_default_secret("POSTGRES_PASSWORD", self.POSTGRES_PASSWORD)
         self._check_default_secret(
             "FIRST_SUPERUSER_PASSWORD", self.FIRST_SUPERUSER_PASSWORD
